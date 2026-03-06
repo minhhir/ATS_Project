@@ -1,6 +1,6 @@
 const authService = require('../services/authService');
 
-// Cấu hình Cookie cực kỳ bảo mật (Chống hacker lấy cắp Token)
+// Cấu hình Cookie
 const COOKIE_OPTIONS = {
     httpOnly: true,   // JS trên trình duyệt không đọc được (Chống XSS)
     secure: process.env.NODE_ENV === 'production',
@@ -42,4 +42,16 @@ exports.refresh = async (req, res, next) => {
 exports.logout = (req, res) => {
     res.clearCookie('refreshToken');
     res.json({ success: true, message: 'Đăng xuất thành công' });
+};
+exports.getMe = async (req, res, next) => {
+    try {
+        // req.user đã được gán từ middleware protect
+        const user = await require('../models/User').findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User không tồn tại' });
+
+        res.json({
+            success: true,
+            user: { id: user._id, name: user.name, role: user.role, email: user.email, avatar: user.avatar }
+        });
+    } catch (err) { next(err); }
 };

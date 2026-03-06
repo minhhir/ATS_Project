@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true },
-    password: { type: String, required: true, minlength: 6 },
+    password: { type: String, required: true, minlength: 6, select: false },
 
     // Phân quyền 3 cấp độ
     role: { type: String, enum: ['admin', 'recruiter', 'candidate'], default: 'candidate' },
@@ -25,10 +25,9 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Mã hóa mật khẩu trước khi lưu vào database
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) return next();
+userSchema.pre('save', async function () {
+    if (!this.isModified('password')) return;
     this.password = await bcrypt.hash(this.password, 12);
-    next();
 });
 
 // Hàm hỗ trợ kiểm tra mật khẩu khi đăng nhập
