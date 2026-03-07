@@ -6,16 +6,17 @@ const rateLimit = require('express-rate-limit'); // <-- Import rate limit
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
+const jobRoutes = require('./routes/jobRoutes');
 
 dotenv.config();
 connectDB();
 
 const app = express();
 
-// 1. Kích hoạt bảo mật HTTP Headers
+// Kích hoạt bảo mật HTTP Headers
 app.use(helmet());
 
-// 2. Chặn Request rác (Brute Force) - Tối đa 100 req/15 phút cho mỗi IP
+// Chặn Request rác (Brute Force) - Tối đa 100 req/15 phút cho mỗi IP
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -23,7 +24,7 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// 3. Middlewares cơ bản
+// Middlewares cơ bản
 app.use(cors({
     origin: process.env.CLIENT_URL,
     credentials: true
@@ -34,6 +35,7 @@ app.use(cookieParser());
 
 // Định tuyến API
 app.use('/api/auth', authRoutes);
+app.use('/api/jobs', jobRoutes);
 // Test Route trang chủ
 app.get('/', (req, res) => {
     res.send('Backend Mini ATS đang chạy chuẩn với Bảo mật tối đa!');
