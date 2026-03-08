@@ -1,0 +1,45 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from services.extractor import extract_text_from_url
+from services.scorer import score_cv
+
+app = FastAPI(title='Mini ATS AI Service', version='1.0')
+
+
+class ScoreRequest(BaseModel):
+    cv_url: str
+    jd_text: str
+
+
+class ScoreResponse(BaseModel):
+    score: float
+    matched_keywords: list[str]
+    summary: str
+
+
+@app.get('/health')
+def health_check():
+    return {'status': 'ok', 'service': 'ai-python'}
+
+
+@app.post('/score', response_model=ScoreResponse)
+async def score_application(req: ScoreRequest):
+    try:
+        cv_text = await extract_text_from_url(req.cv_url)
+
+        if not cv_text or len(cv_text) < 50:
+            raise HTTPException(status_code=422, detail='PDF quá ngắn hoặc không có text thuần (có thể là ảnh scan).')
+
+        result = score_cv(cv_text, req.jd_text)
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

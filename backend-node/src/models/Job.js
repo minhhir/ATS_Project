@@ -10,7 +10,7 @@ const jobSchema = new mongoose.Schema({
     // Bộ lọc tìm kiếm
     location: { type: String, required: true },
 
-    // ✅ Fix Bug 1: Chặn lương âm và validate salaryMax >= salaryMin
+    // Chặn lương âm và validate salaryMax >= salaryMin
     salaryMin: { type: Number, min: 0 },
     salaryMax: {
         type: Number,
@@ -32,7 +32,7 @@ const jobSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true },
     deadline: { type: Date },
 
-    // ✅ Fix Bug 2: Chặn applicantCount bị âm
+    // Chặn applicantCount bị âm
     applicantCount: { type: Number, default: 0, min: 0 },
 }, { timestamps: true });
 

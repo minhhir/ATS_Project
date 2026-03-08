@@ -35,7 +35,7 @@ exports.refreshToken = async (token) => {
     const user = await User.findById(decoded.id);
 
     if (!user) throw new AppError('User không tồn tại', 404);
-    if (!user.isActive) throw new AppError('Tài khoản đã bị khóa', 403); // <-- Fix Bug 3: Chặn token nếu bị ban
+    if (!user.isActive) throw new AppError('Tài khoản đã bị khóa', 403); // <--  Chặn token nếu bị ban
 
     return generateTokens(user._id, user.role);
 };

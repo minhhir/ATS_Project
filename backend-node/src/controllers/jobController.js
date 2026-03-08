@@ -78,7 +78,7 @@ exports.getJobById = async (req, res, next) => {
 // [POST] /api/jobs - Đăng tin tuyển dụng mới (Chỉ HR)
 exports.createJob = async (req, res, next) => {
     try {
-        // ✅ Fix Bug 1: Whitelist dữ liệu đầu vào (Chống Mass Assignment)
+        // Whitelist dữ liệu đầu vào (Chống Mass Assignment)
         const { title, description, requirements, location,
             salaryMin, salaryMax, level, type, skills, deadline } = req.body;
 
@@ -95,7 +95,7 @@ exports.createJob = async (req, res, next) => {
 // [PUT] /api/jobs/:id - Cập nhật tin
 exports.updateJob = async (req, res, next) => {
     try {
-        // ✅ Fix Bug 2: Chỉ thao tác trên Job đang active
+        // Chỉ thao tác trên Job đang active
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
 
@@ -128,7 +128,7 @@ exports.updateJob = async (req, res, next) => {
 // [DELETE] /api/jobs/:id - Xóa tin (Soft delete)
 exports.deleteJob = async (req, res, next) => {
     try {
-        // ✅ Fix Bug 2: Chỉ thao tác trên Job đang active
+        // Chỉ thao tác trên Job đang active
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
 
@@ -146,7 +146,7 @@ exports.deleteJob = async (req, res, next) => {
 // [PATCH] /api/jobs/:id/feature - Đánh dấu nổi bật (Dành cho HR/Admin)
 exports.toggleFeatured = async (req, res, next) => {
     try {
-        // ✅ Fix Bug 2: Chỉ thao tác trên Job đang active
+        // Chỉ thao tác trên Job đang active
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
 

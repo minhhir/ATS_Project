@@ -27,7 +27,7 @@ const applicationSchema = new mongoose.Schema({
 // Đảm bảo 1 ứng viên chỉ được nộp 1 lần cho 1 công việc
 applicationSchema.index({ job: 1, candidate: 1 }, { unique: true });
 
-// ✅ Fix Vấn đề 3: Thêm index tối ưu performance cho các query thường dùng nhất
+// Thêm index tối ưu performance cho các query thường dùng nhất
 applicationSchema.index({ job: 1, aiScore: -1 });         // Cho HR: Lọc ứng viên của 1 job theo điểm AI giảm dần
 applicationSchema.index({ candidate: 1, createdAt: -1 }); // Cho Candidate: Xem lịch sử nộp đơn mới nhất
 
