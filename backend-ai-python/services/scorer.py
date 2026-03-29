@@ -5,8 +5,8 @@ from collections import Counter
 # Tập từ khóa dừng (stop words) tiếng Anh cơ bản
 STOP_WORDS = {"i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "he", "him", "his", "she", "her", "hers", "it", "its", "they", "them", "their", "theirs", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "can", "will", "just", "don", "should", "now"}
 
+#hàm chuẩn hóa văn bản: loại bỏ dấu câu, chuyển về chữ thường, loại bỏ khoảng trắng thừa
 def preprocess(text: str) -> str:
-    """Chuẩn hóa text: lowercase, bỏ ký tự đặc biệt"""
     text = text.lower()
     text = re.sub(r'[^a-z0-9àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệ\s]', ' ', text)
     return re.sub(r'\s+', ' ', text).strip()

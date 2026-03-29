@@ -1,8 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const helmet = require('helmet'); // <-- Import helmet
-const rateLimit = require('express-rate-limit'); // <-- Import rate limit
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
@@ -14,10 +14,8 @@ connectDB();
 
 const app = express();
 
-// Kích hoạt bảo mật HTTP Headers
 app.use(helmet());
 
-// Chặn Request rác (Brute Force) - Tối đa 100 req/15 phút cho mỗi IP
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -25,34 +23,33 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
-// Middlewares cơ bản
 app.use(cors({
     origin: process.env.CLIENT_URL,
     credentials: true
 }));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // <-- Parse form html truyền thống
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Định tuyến API
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
 app.use('/api/applications', applicationRoutes);
-// Test Route trang chủ
+
 app.get('/', (req, res) => {
-    res.send('Backend Mini ATS đang chạy chuẩn với Bảo mật tối đa!');
+    res.send('Backend Mini ATS đang chạy!');
 });
-// Centralized Error Handler
+
 app.use((err, req, res, next) => {
     console.error('[ERROR]', err.message);
     const statusCode = err.statusCode || 500;
     res.status(statusCode).json({
         success: false,
         message: err.message || 'Lỗi server nội bộ',
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(` http://localhost:${PORT}`);
+    console.log(`Server running on http://localhost:${PORT}`);
 });

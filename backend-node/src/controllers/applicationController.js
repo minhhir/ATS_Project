@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Application = require('../models/Application');
 const Job = require('../models/Job');
 const AppError = require('../utils/AppError');
@@ -10,26 +11,25 @@ exports.applyForJob = async (req, res, next) => {
         const { jobId } = req.params;
         const candidateId = req.user.id;
 
-        //  Validate input (file) trước khi query Database
+        // FIX: Validate jobId trước để tránh Mongoose CastError
+        if (!mongoose.Types.ObjectId.isValid(jobId)) {
+            throw new AppError('jobId không hợp lệ', 400);
+        }
+
         if (!req.file) throw new AppError('Vui lòng đính kèm file CV (PDF)', 400);
 
-        //  Check Job tồn tại và active
         const job = await Job.findOne({ _id: jobId, isActive: true });
         if (!job) throw new AppError('Công việc không tồn tại hoặc đã đóng', 404);
 
-        //  Kiểm tra deadline của Job
         if (job.deadline && new Date() > job.deadline) {
             throw new AppError('Tin tuyển dụng đã hết hạn nộp hồ sơ', 400);
         }
 
-        //  Check trùng đơn (1 ứng viên - 1 job)
         const existingApp = await Application.findOne({ job: jobId, candidate: candidateId });
         if (existingApp) throw new AppError('Bạn đã nộp đơn cho vị trí này rồi', 400);
 
-        // Đẩy file lên Cloudinary với originalname
         const uploadResult = await uploadToCloudinary(req.file.buffer, req.file.originalname);
 
-        // Tạo Application
         const application = await Application.create({
             job: jobId,
             candidate: candidateId,
@@ -37,11 +37,12 @@ exports.applyForJob = async (req, res, next) => {
             coverLetter: req.body.coverLetter || ''
         });
 
-        // Atomic update để tăng số lượng ứng viên
         await Job.findByIdAndUpdate(jobId, { $inc: { applicantCount: 1 } });
 
-        // Kích hoạt AI chấm điểm ngầm (Fire-and-forget)
-        aiService.triggerAIScoring(application._id).catch(err => console.error(err));
+        // Fire-and-forget: AI chấm điểm ngầm, không làm trễ response
+        aiService.triggerAIScoring(application._id).catch(err =>
+            console.error('[AI Scoring Failed]:', err.message)
+        );
 
         res.status(201).json({
             success: true,
@@ -55,24 +56,31 @@ exports.applyForJob = async (req, res, next) => {
 exports.getApplicationsByJob = async (req, res, next) => {
     try {
         const { jobId } = req.params;
-        const { page, limit } = req.query;
+        const { page, limit, sort } = req.query;
 
-        const job = await Job.findOne({ _id: jobId, isActive: true });
+        const job = await Job.findById(jobId);
         if (!job) throw new AppError('Không tìm thấy Job', 404);
 
         if (job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
             throw new AppError('Bạn không có quyền xem danh sách này', 403);
         }
 
-        // Logic Pagination tối ưu RAM
         const pageNum = Math.max(1, parseInt(page) || 1);
         const limitNum = Math.min(50, parseInt(limit) || 20);
         const skip = (pageNum - 1) * limitNum;
 
+        // Cho phép sort từ query: aiScore (mặc định), newest, featured
+        const sortMap = {
+            aiScore: { aiScore: -1 },
+            newest: { createdAt: -1 },
+            featured: { isFeatured: -1, aiScore: -1 },
+        };
+        const sortBy = sortMap[sort] || { aiScore: -1 };
+
         const [applications, total] = await Promise.all([
             Application.find({ job: jobId })
                 .populate('candidate', 'name email phone avatar')
-                .sort({ aiScore: -1 })
+                .sort(sortBy)
                 .skip(skip)
                 .limit(limitNum)
                 .lean(),
@@ -101,7 +109,6 @@ exports.updateApplicationStatus = async (req, res, next) => {
 
         const application = await Application.findById(req.params.id).populate('job');
         if (!application) throw new AppError('Không tìm thấy đơn ứng tuyển', 404);
-
         if (!application.job) throw new AppError('Job liên kết không còn tồn tại', 404);
 
         if (application.job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
@@ -109,14 +116,55 @@ exports.updateApplicationStatus = async (req, res, next) => {
         }
 
         application.status = status;
-
-        // Cho phép update thêm ghi chú của HR
-        if (recruiterNote !== undefined) {
-            application.recruiterNote = recruiterNote;
-        }
-
+        if (recruiterNote !== undefined) application.recruiterNote = recruiterNote;
         await application.save();
 
-        res.json({ success: true, message: `Đã cập nhật trạng thái thành ${status}`, data: application });
+        res.json({
+            success: true,
+            message: `Đã cập nhật trạng thái thành ${status}`,
+            data: application
+        });
+    } catch (err) { next(err); }
+};
+
+
+// [PATCH] /api/applications/:id/feature-HR đánh dấu ứng viên nổi bật
+exports.toggleFeatured = async (req, res, next) => {
+    try {
+        const application = await Application.findById(req.params.id).populate('job');
+        if (!application) throw new AppError('Không tìm thấy đơn ứng tuyển', 404);
+        if (!application.job) throw new AppError('Job liên kết không còn tồn tại', 404);
+
+        if (application.job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
+            throw new AppError('Bạn không có quyền thao tác', 403);
+        }
+
+        application.isFeatured = !application.isFeatured;
+        await application.save();
+
+        res.json({ success: true, isFeatured: application.isFeatured });
+    } catch (err) { next(err); }
+};
+
+// [POST] /api/applications/:id/score-Trigger AI chấm lại thủ công (HR)
+exports.retriggerScore = async (req, res, next) => {
+    try {
+        const application = await Application.findById(req.params.id).populate('job');
+        if (!application) throw new AppError('Không tìm thấy đơn ứng tuyển', 404);
+        if (!application.job) throw new AppError('Job liên kết không còn tồn tại', 404);
+
+        if (application.job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
+            throw new AppError('Bạn không có quyền thao tác', 403);
+        }
+        application.aiStatus = 'pending';
+        application.aiScore = undefined;
+        application.aiSummary = undefined;
+        await application.save();
+
+        aiService.triggerAIScoring(application._id).catch(err =>
+            console.error('[AI Retrigger Failed]:', err.message)
+        );
+
+        res.json({ success: true, message: 'Đã gửi yêu cầu chấm điểm lại.' });
     } catch (err) { next(err); }
 };

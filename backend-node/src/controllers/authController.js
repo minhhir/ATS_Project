@@ -1,11 +1,11 @@
 const authService = require('../services/authService');
+const User = require('../models/User');
 
-// Cấu hình Cookie
 const COOKIE_OPTIONS = {
-    httpOnly: true,   // JS trên trình duyệt không đọc được (Chống XSS)
+    httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 ngày
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
 };
 
 exports.register = async (req, res, next) => {
@@ -43,10 +43,10 @@ exports.logout = (req, res) => {
     res.clearCookie('refreshToken');
     res.json({ success: true, message: 'Đăng xuất thành công' });
 };
+
 exports.getMe = async (req, res, next) => {
     try {
-        // req.user đã được gán từ middleware protect
-        const user = await require('../models/User').findById(req.user.id);
+        const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User không tồn tại' });
 
         res.json({

@@ -4,18 +4,34 @@ const { protect } = require('../middlewares/auth');
 const { isCandidate, isRecruiter } = require('../middlewares/role');
 const { upload } = require('../middlewares/upload');
 const applicationController = require('../controllers/applicationController');
+//candidate nộp CV
+router.post('/:jobId/apply',
+    protect, isCandidate,
+    upload.single('cv'),
+    applicationController.applyForJob
+);
+// HR xem danh sách ứng viên cho 1 job
+//admin cũng có quyền xem tất cả ứng viên
 
-// candidate routes
-router.post('/:jobId/apply', protect, isCandidate, upload.single('cv'), applicationController.applyForJob);
+router.get('/job/:jobId',
+    protect, isRecruiter,
+    applicationController.getApplicationsByJob
+);
 
-// recruiter routes/andmin routes
-// Nguyên tắc vàng: Route có path cụ thể (/job/...) LUÔN đặt lên TRƯỚC route chỉ chứa tham số động (/:id)
-router.get('/job/:jobId', protect, isRecruiter, applicationController.getApplicationsByJob);
+router.patch('/:id/feature',
+    protect, isRecruiter,
+    applicationController.toggleFeatured
+);
 
-//có thể thêm route xem chi tiết đơn ứng tuyển nếu cần, nhưng hiện tại chưa có yêu cầu cụ thể nên tạm comment lại
-// router.get('/:id', protect, applicationController.getApplicationById);
+router.post('/:id/score',
+    protect, isRecruiter,
+    applicationController.retriggerScore
+);
 
-// Route xử lý thao tác với ID cụ thể đặt ở dưới cùng
-router.patch('/:id/status', protect, isRecruiter, applicationController.updateApplicationStatus);
+// Route với :id đặt cuối cùng để tránh xung đột
+router.patch('/:id/status',
+    protect, isRecruiter,
+    applicationController.updateApplicationStatus
+);
 
 module.exports = router;
