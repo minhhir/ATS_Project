@@ -10,15 +10,13 @@ def preprocess(text: str) -> str:
     text = text.lower()
     text = re.sub(r'[^a-z0-9àáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệ\s]', ' ', text)
     return re.sub(r'\s+', ' ', text).strip()
-
+#hàm tính tần suất xuất hiện từ
 def get_term_frequencies(words: list) -> dict:
-    """Tính tần suất xuất hiện của từng từ (TF)"""
     tf = Counter(words)
     total_words = len(words)
     return {word: count / total_words for word, count in tf.items()}
-
+#hàm tính điểm
 def score_cv(cv_text: str, jd_text: str) -> dict:
-    """Tính điểm tương đồng bằng Pure Python (TF-IDF + Cosine Similarity)"""
     cv_clean = preprocess(cv_text)
     jd_clean = preprocess(jd_text)
 

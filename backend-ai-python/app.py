@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from services.extractor import extract_text_from_url
@@ -25,21 +26,27 @@ def health_check():
 @app.post('/score', response_model=ScoreResponse)
 async def score_application(req: ScoreRequest):
     try:
+        # I/O-bound: tải PDF từ Cloudinary
         cv_text = await extract_text_from_url(req.cv_url)
 
         if not cv_text or len(cv_text) < 50:
-            raise HTTPException(status_code=422, detail='PDF quá ngắn hoặc không có text thuần (có thể là ảnh scan).')
+            raise HTTPException(
+                status_code=422,
+                detail='PDF quá ngắn hoặc không có text thuần (có thể là ảnh scan).'
+            )
 
-        result = score_cv(cv_text, req.jd_text)
+        result = await asyncio.to_thread(score_cv, cv_text, req.jd_text)
         return result
 
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    # Exception không xác định → trả 500 (lỗi phía server)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
