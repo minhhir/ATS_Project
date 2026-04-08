@@ -6,6 +6,13 @@ from services.scorer import score_cv
 
 app = FastAPI(title='Mini ATS AI Service', version='1.0')
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:5000"], # Cho phép React và Node gọi
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+) 
 
 class ScoreRequest(BaseModel):
     cv_url: str

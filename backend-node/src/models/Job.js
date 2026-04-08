@@ -1,18 +1,17 @@
 const mongoose = require('mongoose');
 
 const jobSchema = new mongoose.Schema({
-    title: { type: String, required: true },
-    description: { type: String, required: true },
-    requirements: { type: String, required: true },
-    recruiter: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    title: { type: String, required: true, maxlength: 200 },
+    description: { type: String, required: true, maxlength: 10000 },
+    requirements: { type: String, required: true, maxlength: 10000 },
     location: { type: String, required: true },
-    salaryMin: { type: Number, min: 0 },
-
+    recruiter: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    salaryMin: { type: Number },
     salaryMax: {
         type: Number,
-        min: 0,
         validate: {
             validator: function (val) {
+                // Chỉ validate tự động khi create/save
                 if (this instanceof mongoose.Document) {
                     return !this.salaryMin || val >= this.salaryMin;
                 }

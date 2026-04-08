@@ -5,7 +5,9 @@ const applicationSchema = new mongoose.Schema({
     candidate: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
     cvUrl: { type: String, required: true },  // Link Cloudinary của file PDF
-    coverLetter: { type: String },
+
+    // FIXED: Thêm maxlength: 3000 cho coverLetter
+    coverLetter: { type: String, maxlength: 3000 },
 
     // Kết quả AI chấm điểm
     aiScore: { type: Number, min: 0, max: 100 },
@@ -20,7 +22,9 @@ const applicationSchema = new mongoose.Schema({
     },
 
     isFeatured: { type: Boolean, default: false },
-    recruiterNote: { type: String },
+
+    // FIXED: Thêm maxlength: 1000 cho recruiterNote
+    recruiterNote: { type: String, maxlength: 1000 },
 
 }, { timestamps: true });
 

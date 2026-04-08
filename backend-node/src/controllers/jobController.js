@@ -1,5 +1,6 @@
 const Job = require('../models/Job');
 const AppError = require('../utils/AppError');
+const mongoose = require('mongoose');
 
 // [GET] /api/jobs - Lấy danh sách Job (Có search, filter, pagination)
 exports.getJobs = async (req, res, next) => {
@@ -20,7 +21,13 @@ exports.getJobs = async (req, res, next) => {
 
         // Logic lọc lương đúng
         if (salaryMin) filter.salaryMax = { $gte: Number(salaryMin) };
-        if (salaryMax) filter.salaryMin = { $lte: Number(salaryMax) };
+        if (salaryMax) {
+            filter.$or = [
+                { salaryMin: { $lte: Number(salaryMax) } },
+                { salaryMin: { $exists: false } },
+                { salaryMin: null }
+            ];
+        }
 
         const sortMap = {
             newest: { createdAt: -1 },
@@ -95,12 +102,14 @@ exports.createJob = async (req, res, next) => {
 // [PUT] /api/jobs/:id - Cập nhật tin
 exports.updateJob = async (req, res, next) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id))
+            throw new AppError('Job ID không hợp lệ', 400);
+
         // Chỉ thao tác trên Job đang active
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
 
-        // Kiểm tra quyền sở hữu
-        if (job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
+        if (job.recruiter?.toString() !== req.user.id && req.user.role !== 'admin') {
             throw new AppError('Bạn không có quyền sửa tin này', 403);
         }
 
@@ -113,15 +122,16 @@ exports.updateJob = async (req, res, next) => {
             salaryMin, salaryMax, level, type, skills, deadline
         };
 
+        // Lọc bỏ các key undefined
         Object.keys(allowedUpdates).forEach(
             k => allowedUpdates[k] === undefined && delete allowedUpdates[k]
         );
 
-        const updated = await Job.findByIdAndUpdate(
-            req.params.id, allowedUpdates, { new: true, runValidators: true }
-        );
+        Object.assign(job, allowedUpdates);
+        await job.save();
 
-        res.json({ success: true, data: updated });
+        // Trả về biến 'job' vừa được lưu xong
+        res.json({ success: true, data: job });
     } catch (err) { next(err); }
 };
 
@@ -132,7 +142,8 @@ exports.deleteJob = async (req, res, next) => {
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
 
-        if (job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
+        // ✅ FIX 2.2: Thêm ? 
+        if (job.recruiter?.toString() !== req.user.id && req.user.role !== 'admin') {
             throw new AppError('Bạn không có quyền xóa tin này', 403);
         }
 
@@ -150,7 +161,8 @@ exports.toggleFeatured = async (req, res, next) => {
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
 
-        if (job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
+        // ✅ FIX 2.2: Thêm ? 
+        if (job.recruiter?.toString() !== req.user.id && req.user.role !== 'admin') {
             throw new AppError('Bạn không có quyền thao tác', 403);
         }
 

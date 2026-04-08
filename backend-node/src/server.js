@@ -16,17 +16,17 @@ const app = express();
 
 app.use(helmet());
 
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: 'Quá nhiều request từ IP này, vui lòng thử lại sau 15 phút!'
-});
-app.use('/api', limiter);
-
 app.use(cors({
     origin: process.env.CLIENT_URL,
     credentials: true
 }));
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 2000,
+    message: 'Quá nhiều request từ IP này, vui lòng thử lại sau 15 phút!'
+});
+app.use('/api', limiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -41,10 +41,20 @@ app.get('/', (req, res) => {
 
 app.use((err, req, res, next) => {
     console.error('[ERROR]', err.message);
-    const statusCode = err.statusCode || 500;
+    let statusCode = err.statusCode || 500;
+    let message = err.message || 'Lỗi server nội bộ';
+    if (err.name === 'ValidationError') {
+        statusCode = 400;
+        message = Object.values(err.errors).map(val => val.message).join(', ');
+    }
+    if (err.code === 11000) {
+        statusCode = 400;
+        message = 'Dữ liệu đã bị trùng lặp (Duplicate Key)';
+    }
+
     res.status(statusCode).json({
         success: false,
-        message: err.message || 'Lỗi server nội bộ',
+        message: message,
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
     });
 });
