@@ -1,5 +1,6 @@
 import asyncio
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from services.extractor import extract_text_from_url
 from services.scorer import score_cv

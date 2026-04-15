@@ -26,6 +26,11 @@ const jobSchema = new mongoose.Schema({
         enum: ['intern', 'fresher', 'junior', 'mid', 'senior', 'lead'],
         required: true
     },
+    experience: {
+        type: String,
+        enum: ['không yêu cầu', '<1 năm', '1-2 năm', '3-5 năm', '>5 năm'],
+        default: 'không yêu cầu'
+    },
     type: {
         type: String,
         enum: ['full-time', 'part-time', 'remote', 'contract'],

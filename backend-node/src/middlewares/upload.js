@@ -38,7 +38,9 @@ const uploadToCloudinary = (fileBuffer, originalName) => {
             let stream = cloudinary.uploader.upload_stream(
                 {
                     folder: "mini_ats_cvs",
-                    resource_type: "raw", // PDF lưu dạng raw
+                    resource_type: "auto", // PDF lưu dạng raw
+                    format: "pdf",
+                    access_mode: "public",
                     public_id: publicId
                 },
                 (error, result) => {

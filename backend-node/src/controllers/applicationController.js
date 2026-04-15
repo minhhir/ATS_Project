@@ -4,6 +4,7 @@ const Job = require('../models/Job');
 const AppError = require('../utils/AppError');
 const { uploadToCloudinary } = require('../middlewares/upload');
 const aiService = require('../services/aiService');
+const Notification = require('../models/Notification');
 
 // [POST] /api/applications/:jobId/apply - Ứng viên nộp CV
 exports.applyForJob = async (req, res, next) => {
@@ -39,15 +40,32 @@ exports.applyForJob = async (req, res, next) => {
 
         await Job.findByIdAndUpdate(jobId, { $inc: { applicantCount: 1 } });
 
+        await Notification.create({
+            recipient: job.recruiter,
+            title: 'Có ứng viên mới!',
+            message: `Ứng viên vừa nộp CV vào vị trí "${job.title}".`,
+            link: `/recruiter/jobs/${jobId}/applicants` // Link thẳng vào danh sách ứng viên của job đó
+        });
         // Fire-and-forget: AI chấm điểm ngầm, không làm trễ response
         aiService.triggerAIScoring(application._id, {
             cvUrl: uploadResult.secure_url,
             jdText: job.requirements
-        }).catch(err => console.error(err));
+        }).catch(async (err) => {
+            console.error('[AI Processing Error]:', err);
+            await Application.findByIdAndUpdate(application._id, { aiStatus: 'error' });
+        });
+
         res.status(201).json({
             success: true,
-            message: 'Nộp CV thành công! AI đang tiến hành phân tích.',
-            data: application
+            message: 'Nộp đơn thành công',
+            data: {
+                id: application._id,
+                jobId: application.job,
+                cvUrl: application.cvUrl,
+                status: application.status,
+                aiStatus: application.aiStatus,
+                createdAt: application.createdAt,
+            }
         });
     } catch (err) { next(err); }
 };
@@ -57,6 +75,9 @@ exports.getApplicationsByJob = async (req, res, next) => {
     try {
         const { jobId } = req.params;
         const { page, limit, sort } = req.query;
+
+        if (!mongoose.Types.ObjectId.isValid(jobId))
+            throw new AppError('Job ID không hợp lệ', 400);
 
         const job = await Job.findById(jobId);
         if (!job) throw new AppError('Không tìm thấy Job', 404);
@@ -98,6 +119,7 @@ exports.getApplicationsByJob = async (req, res, next) => {
 };
 
 // [PATCH] /api/applications/:id/status - HR duyệt/từ chối CV
+// [PATCH] /api/applications/:id/status - HR duyệt/từ chối CV
 exports.updateApplicationStatus = async (req, res, next) => {
     try {
         const { status, recruiterNote } = req.body;
@@ -119,6 +141,22 @@ exports.updateApplicationStatus = async (req, res, next) => {
         if (recruiterNote !== undefined) application.recruiterNote = recruiterNote;
         await application.save();
 
+        // ✅ TẠO THÔNG BÁO BẮN VỀ CHO ỨNG VIÊN (CANDIDATE)
+        const statusMap = {
+            'reviewing': 'Đang xem xét',
+            'shortlisted': 'Vào danh sách rút gọn',
+            'interviewed': 'Mời phỏng vấn',
+            'offered': 'Trúng tuyển 🎉',
+            'rejected': 'Không phù hợp'
+        };
+
+        await Notification.create({
+            recipient: application.candidate, // Người nhận là Ứng viên
+            title: 'Cập nhật trạng thái hồ sơ',
+            message: `Hồ sơ ứng tuyển vị trí "${application.job.title}" của bạn đã được chuyển sang trạng thái: ${statusMap[status]}.`,
+            link: '/applications' // Link trỏ về trang Quản lý CV của Ứng viên
+        });
+
         res.json({
             success: true,
             message: `Đã cập nhật trạng thái thành ${status}`,
@@ -126,7 +164,6 @@ exports.updateApplicationStatus = async (req, res, next) => {
         });
     } catch (err) { next(err); }
 };
-
 // [PATCH] /api/applications/:id/feature - HR đánh dấu ứng viên nổi bật
 exports.toggleFeatured = async (req, res, next) => {
     try {
@@ -154,8 +191,25 @@ exports.retriggerScore = async (req, res, next) => {
         aiService.triggerAIScoring(app._id, {
             cvUrl: app.cvUrl,
             jdText: app.job.requirements
-        }).catch(err => console.error(err));
+        }).catch(async (err) => {
+            console.error('[AI Retrigger Error]:', err);
+            await Application.findByIdAndUpdate(app._id, { aiStatus: 'error' });
+        });
 
         res.json({ success: true, message: 'Đã gửi yêu cầu chấm lại AI' });
+    } catch (err) { next(err); }
+};
+exports.getMyApplications = async (req, res, next) => {
+    try {
+        const applications = await Application.find({ candidate: req.user.id })
+            .populate({
+                path: 'job',
+                select: 'title location type level recruiter',
+                populate: { path: 'recruiter', select: 'companyName companyLogo' }
+            })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({ success: true, data: applications });
     } catch (err) { next(err); }
 };

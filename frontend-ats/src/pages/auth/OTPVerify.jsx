@@ -24,6 +24,7 @@ export function OTPVerify() {
             return () => clearTimeout(timer);
         }
     }, [resendCd]);
+    const isSubmitting = useRef(false); // Ngăn submit nhiều lần
 
     // Hàm verify bọc trong useCallback để tránh stale closure
     const handleVerify = useCallback(async (e) => {
@@ -48,8 +49,9 @@ export function OTPVerify() {
 
     // Auto-submit khi nhập đủ 6 số
     useEffect(() => {
-        if (digits.every(d => d !== '' && /^\d$/.test(d))) {
-            handleVerify();
+        if (digits.every(d => d !== '' && /^\d$/.test(d)) && !isSubmitting.current) {
+            isSubmitting.current = true;
+            handleVerify().finally(() => { isSubmitting.current = false; });
         }
     }, [digits, handleVerify]);
 

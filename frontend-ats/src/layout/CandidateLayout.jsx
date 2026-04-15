@@ -1,15 +1,11 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { LogOut, User, Briefcase } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { Logo } from '@/ui/Logo';
+import { NotificationBell } from '@/components/shared/NotificationBell';
 
 export function CandidateLayout({ children }) {
     const { user, logout } = useAuth();
-    const navigate = useNavigate();
-
-    const handleLogout = async () => {
-        await logout();
-        navigate('/login');
-    };
 
     return (
         <div className="min-h-screen bg-surface flex flex-col font-sans">
@@ -18,12 +14,7 @@ export function CandidateLayout({ children }) {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
 
                     {/* Logo */}
-                    <Link to="/jobs" className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-primary rounded-lg text-white flex items-center justify-center font-bold">
-                            M
-                        </div>
-                        <span className="text-xl font-extrabold tracking-tight text-text-main">Mini ATS</span>
-                    </Link>
+                    <Logo />
 
                     {/* Main Navigation */}
                     <nav className="hidden md:flex items-center gap-8">
@@ -38,12 +29,16 @@ export function CandidateLayout({ children }) {
 
                     {/* User Menu */}
                     <div className="flex items-center gap-4">
-                        <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-primary-light/50 rounded-full">
+                        <Link to="/settings" className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-primary-light/50 rounded-full hover:bg-primary-light transition-colors cursor-pointer">
                             <User size={16} className="text-primary" />
                             <span className="text-sm font-bold text-primary">{user?.name || 'Ứng viên'}</span>
-                        </div>
+                        </Link>
+
+                        {/* ✅ XÓA CÁI LINK TĨNH CŨ ĐI, THAY BẰNG COMPONENT CHUÔNG REAL-TIME NÀY */}
+                        <NotificationBell />
+
                         <button
-                            onClick={handleLogout}
+                            onClick={logout}
                             className="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
                             title="Đăng xuất"
                         >

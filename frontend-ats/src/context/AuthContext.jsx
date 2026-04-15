@@ -49,6 +49,7 @@ export const AuthProvider = ({ children }) => {
         try { await api.post('/auth/logout'); } catch { }
         window.__accessToken = null;
         setUser(null);
+        window.location.href = '/';
     }, []);
 
     return (

@@ -1,23 +1,20 @@
+import { Logo } from '@/ui/Logo';
+
 export function AuthLayout({ children }) {
     return (
         <div className="min-h-screen flex bg-background">
             {/* Left Form Section */}
             <div className="flex-1 flex flex-col justify-center px-6 sm:px-16 lg:px-24 relative z-10">
                 <div className="w-full max-w-[400px] mx-auto">
-                    {/* Logo Mới (Chữ M) */}
-                    <div className="flex items-center gap-2 mb-10">
-                        <div className="w-8 h-8 bg-primary rounded-lg text-white flex items-center justify-center font-bold text-lg shadow-sm">
-                            M
-                        </div>
-                        <span className="text-xl font-extrabold tracking-tight text-text-main">Mini ATS</span>
-                    </div>
+                    {/* ✅ Đã dùng component Logo và truyền margin-bottom */}
+                    <Logo className="mb-10" />
 
                     {/* Form sẽ được render ở đây */}
                     {children}
                 </div>
             </div>
 
-            {/* Right Decor Section (Solid Shapes - Sáng sủa, mượt mà) */}
+            {/* Right Decor Section */}
             <div className="hidden lg:flex flex-1 bg-primary-light relative overflow-hidden flex-col items-center justify-center">
                 <div className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] rounded-full bg-white/40"></div>
                 <div className="absolute bottom-[-15%] left-[-10%] w-[400px] h-[400px] rounded-full bg-primary/10"></div>

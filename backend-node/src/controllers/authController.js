@@ -12,17 +12,9 @@ const COOKIE_OPTIONS = {
 
 exports.register = async (req, res, next) => {
     try {
-        const { accessToken, refreshToken } = await authService.register(req.body);
-        res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
-        res.status(201).json({ success: true, accessToken });
-    } catch (err) { next(err); }
-};
-
-exports.login = async (req, res, next) => {
-    try {
-        const { tokens, user } = await authService.login(req.body);
+        const { tokens, user } = await authService.register(req.body);
         res.cookie('refreshToken', tokens.refreshToken, COOKIE_OPTIONS);
-        res.json({
+        res.status(201).json({
             success: true,
             accessToken: tokens.accessToken,
             user: { id: user._id, name: user.name, role: user.role, email: user.email },
@@ -30,6 +22,30 @@ exports.login = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
+exports.login = async (req, res, next) => {
+    try {
+        const { email, password, rememberMe } = req.body;
+        const { tokens, user } = await authService.login({ email, password });
+
+        const COOKIE_OPTIONS = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+        };
+
+        if (rememberMe) {
+            COOKIE_OPTIONS.maxAge = 7 * 24 * 60 * 60 * 1000; // 7 ngày
+        }
+
+        res.cookie('refreshToken', tokens.refreshToken, COOKIE_OPTIONS);
+
+        res.json({
+            success: true,
+            accessToken: tokens.accessToken,
+            user: { id: user._id, name: user.name, role: user.role, email: user.email },
+        });
+    } catch (err) { next(err); }
+};
 exports.refresh = async (req, res, next) => {
     try {
         const token = req.cookies.refreshToken;
@@ -46,15 +62,26 @@ exports.logout = (req, res) => {
     res.json({ success: true, message: 'Đăng xuất thành công' });
 };
 
-exports.getMe = async (req, res, next) => {
-    try {
-        const user = await User.findById(req.user.id);
-        if (!user) return res.status(404).json({ message: 'User không tồn tại' });
-        res.json({
-            success: true,
-            user: { id: user._id, name: user.name, role: user.role, email: user.email, avatar: user.avatar },
-        });
-    } catch (err) { next(err); }
+exports.getMe = (req, res) => {
+    // protect middleware đã load user từ DB, dùng luôn không cần query thêm
+    const user = req.user;
+    res.json({
+        success: true,
+        user: {
+            id: user._id,
+            name: user.name,
+            role: user.role,
+            email: user.email,
+            avatar: user.avatar,
+            phone: user.phone,
+            skills: user.skills,
+            cvUrl: user.cvUrl,
+            companyName: user.companyName,
+            companyLogo: user.companyLogo,
+            companyWebsite: user.companyWebsite,
+            companyDesc: user.companyDesc,
+        },
+    });
 };
 
 // ─── THÊM MỚI: Reset password flow ───────────────────────────────────────────
@@ -115,5 +142,35 @@ exports.resetPassword = async (req, res, next) => {
         await authService.resetPassword({ email, otp: String(otp), newPassword });
 
         res.json({ success: true, message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' });
+    } catch (err) { next(err); }
+};
+// [PUT] /api/auth/profile - Cập nhật thông tin cá nhân
+exports.updateProfile = async (req, res, next) => {
+    try {
+        const { name, phone, skills, companyName, companyWebsite, companyDesc } = req.body;
+        const user = await User.findById(req.user.id);
+
+        // Update thông tin chung
+        if (name !== undefined) user.name = name;
+        if (phone !== undefined) user.phone = phone;
+
+        // Update riêng cho Ứng viên
+        if (user.role === 'candidate' && skills !== undefined) {
+            // Tự động băm chuỗi "React, NodeJS" thành mảng ['React', 'NodeJS']
+            user.skills = typeof skills === 'string'
+                ? skills.split(',').map(s => s.trim()).filter(Boolean)
+                : skills;
+        }
+
+        // Update riêng cho Nhà tuyển dụng
+        if (user.role === 'recruiter' || user.role === 'admin') {
+            if (companyName !== undefined) user.companyName = companyName;
+            if (companyWebsite !== undefined) user.companyWebsite = companyWebsite;
+            if (companyDesc !== undefined) user.companyDesc = companyDesc;
+        }
+
+        await user.save();
+
+        res.json({ success: true, message: 'Cập nhật thành công', user });
     } catch (err) { next(err); }
 };

@@ -21,10 +21,21 @@ exports.triggerAIScoring = async (applicationId, data = null) => {
     // Dùng updateOne thay vì findById → save() — không cần load toàn bộ document
     await Application.updateOne({ _id: applicationId }, { aiStatus: 'processing' });
 
+    // Fallback: tránh gửi undefined sang Python → Python validate fail → 400
+    if (!cvUrl) {
+        console.error('[AI Service]: cvUrl bị undefined, bỏ qua.');
+        await Application.updateOne({ _id: applicationId }, { aiStatus: 'error' });
+        return;
+    }
+    const safejdText = jdText || '';
+
     try {
+        const payload = { cv_url: cvUrl, jd_text: safejdText };
+        console.log('[AI Service] Payload gửi Python:', JSON.stringify(payload).slice(0, 200));
+
         const response = await axios.post(
             `${process.env.AI_SERVICE_URL}/score`,
-            { cv_url: cvUrl, jd_text: jdText },
+            payload,
             { timeout: 30000 }
         );
         await Application.updateOne({ _id: applicationId }, {
@@ -34,7 +45,8 @@ exports.triggerAIScoring = async (applicationId, data = null) => {
         });
     } catch (err) {
         await Application.updateOne({ _id: applicationId }, { aiStatus: 'error' });
-        console.error('[AI Service Error]:', err.message);
+        const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+        console.error('[AI Service Error]:', detail);
     }
 };
 

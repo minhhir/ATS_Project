@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 // [GET] /api/jobs - Lấy danh sách Job (Có search, filter, pagination)
 exports.getJobs = async (req, res, next) => {
     try {
-        const { keyword, location, level, salaryMin, salaryMax, type, sort, page, limit } = req.query;
+        const { keyword, location, level, salaryMin, salaryMax, type, experience, sort, page, limit } = req.query;
 
         // Ép kiểu và giới hạn limit
         const pageNum = Math.max(1, parseInt(page) || 1);
@@ -18,17 +18,19 @@ exports.getJobs = async (req, res, next) => {
         if (location) filter.location = new RegExp(location, 'i');
         if (level) filter.level = level;
         if (type) filter.type = type;
+        if (experience) filter.experience = experience;
 
         // Logic lọc lương đúng
-        if (salaryMin) filter.salaryMax = { $gte: Number(salaryMin) };
-        if (salaryMax) {
+        if (salaryMin && !isNaN(salaryMin)) {
+            filter.salaryMax = { $gte: Number(salaryMin) };
+        }
+        if (salaryMax && !isNaN(salaryMax)) {
             filter.$or = [
                 { salaryMin: { $lte: Number(salaryMax) } },
                 { salaryMin: { $exists: false } },
                 { salaryMin: null }
             ];
         }
-
         const sortMap = {
             newest: { createdAt: -1 },
             popular: { applicantCount: -1 },
@@ -72,6 +74,9 @@ exports.getFeaturedJobs = async (req, res, next) => {
 // [GET] /api/jobs/:id - Lấy chi tiết 1 Job
 exports.getJobById = async (req, res, next) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id))
+            throw new AppError('Job ID không hợp lệ', 400);
+
         const job = await Job.findOne({ _id: req.params.id, isActive: true })
             .populate('recruiter', 'name companyName companyLogo companyWebsite companyDesc')
             .lean();
@@ -138,6 +143,9 @@ exports.updateJob = async (req, res, next) => {
 // [DELETE] /api/jobs/:id - Xóa tin (Soft delete)
 exports.deleteJob = async (req, res, next) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id))
+            throw new AppError('Job ID không hợp lệ', 400);
+
         // Chỉ thao tác trên Job đang active
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
@@ -157,6 +165,9 @@ exports.deleteJob = async (req, res, next) => {
 // [PATCH] /api/jobs/:id/feature - Đánh dấu nổi bật (Dành cho HR/Admin)
 exports.toggleFeatured = async (req, res, next) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id))
+            throw new AppError('Job ID không hợp lệ', 400);
+
         // Chỉ thao tác trên Job đang active
         const job = await Job.findOne({ _id: req.params.id, isActive: true });
         if (!job) throw new AppError('Không tìm thấy tin tuyển dụng', 404);
@@ -170,5 +181,16 @@ exports.toggleFeatured = async (req, res, next) => {
         await job.save();
 
         res.json({ success: true, isFeatured: job.isFeatured });
+    } catch (err) { next(err); }
+};
+// [GET] /api/jobs/my-jobs - Lấy danh sách Job do chính HR này đăng
+exports.getMyJobs = async (req, res, next) => {
+    try {
+        // req.user.id được lấy từ token (middleware protect)
+        const jobs = await Job.find({ recruiter: req.user.id, isActive: true })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({ success: true, data: jobs });
     } catch (err) { next(err); }
 };

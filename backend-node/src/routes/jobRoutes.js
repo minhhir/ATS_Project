@@ -1,13 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middlewares/auth');
-const { isRecruiter } = require('../middlewares/role'); // Dùng file role.js đã tạo hôm qua
+const { isRecruiter } = require('../middlewares/role');
 const jobController = require('../controllers/jobController');
 
 // public routes
 router.get('/', jobController.getJobs);
-// Route /featured đặt trước /:id để tránh xung đột
 router.get('/featured', jobController.getFeaturedJobs);
+
+// ✅ FIX: Đưa route /my-jobs lên TRƯỚC /:id, và phải gắn protect để lấy req.user.id
+router.get('/my-jobs', protect, isRecruiter, jobController.getMyJobs);
+
+// Route /:id bắt buộc phải để ở cuối nhóm GET
 router.get('/:id', jobController.getJobById);
 
 // protected routes - chỉ recruiter mới được tạo/sửa/xóa job

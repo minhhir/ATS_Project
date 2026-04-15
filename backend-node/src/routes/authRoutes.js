@@ -9,6 +9,7 @@ router.post('/login', authController.login);
 router.post('/refresh', authController.refresh);
 router.post('/logout', authController.logout);
 router.get('/me', protect, authController.getMe);
+router.put('/profile', protect, authController.updateProfile);
 
 // ─── THÊM MỚI: Reset password flow (3 bước) ──────────────────────────────────
 // Bước 1: Yêu cầu OTP

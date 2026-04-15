@@ -1,0 +1,133 @@
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '@/api/axios';
+import { Bell, Check, CheckCircle2 } from 'lucide-react';
+
+export function NotificationBell() {
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [open, setOpen] = useState(false); // ✅ Fix 1: State quản lý Dropdown
+    const bellRef = useRef(null);
+    const navigate = useNavigate();
+
+    const fetchNotifications = async () => {
+        try {
+            const { data } = await api.get('/notifications');
+            setNotifications(data.data);
+            setUnreadCount(data.data.filter(n => !n.isRead).length);
+        } catch (error) {
+            console.error('Lỗi lấy thông báo');
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+        // ✅ Fix 2: Tăng polling lên 30s để giảm tải server
+        const interval = setInterval(fetchNotifications, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // ✅ Fix 1: Xử lý Click Outside để đóng Dropdown
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (bellRef.current && !bellRef.current.contains(e.target)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // ✅ Fix 4: Đánh dấu đọc 1 thông báo và chuyển hướng
+    const handleNotificationClick = async (notif) => {
+        setOpen(false);
+        if (!notif.isRead) {
+            try {
+                await api.patch(`/notifications/${notif._id}/read`);
+                setNotifications(prev =>
+                    prev.map(n => n._id === notif._id ? { ...n, isRead: true } : n)
+                );
+                setUnreadCount(prev => Math.max(0, prev - 1));
+            } catch (error) {
+                console.error('Lỗi khi đánh dấu đã đọc', error);
+            }
+        }
+        if (notif.link) navigate(notif.link);
+    };
+
+    const handleMarkAllRead = async (e) => {
+        e.stopPropagation(); // Ngăn sự kiện click lan ra ngoài làm đóng menu
+        if (unreadCount === 0) return;
+        try {
+            await api.put('/notifications/read-all');
+            setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+            setUnreadCount(0);
+        } catch (error) { }
+    };
+
+    return (
+        <div className="relative" ref={bellRef}>
+            {/* Nút Chuông */}
+            <div
+                className="p-2.5 bg-surface hover:bg-border rounded-full cursor-pointer relative transition-colors"
+                onClick={() => setOpen(prev => !prev)}
+            >
+                <Bell size={20} className="text-text-muted" />
+                {unreadCount > 0 && (
+                    <span className="absolute top-0 right-0 w-4 h-4 bg-danger rounded-full flex items-center justify-center text-[10px] text-white font-bold animate-pulse ring-2 ring-white">
+                        {unreadCount}
+                    </span>
+                )}
+            </div>
+
+            {/* ✅ Fix 1: Chỉ render Dropdown khi open = true */}
+            {open && (
+                <div className="absolute right-0 mt-3 w-80 bg-white border border-border shadow-xl rounded-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    <div className="p-4 border-b border-border flex items-center justify-between bg-surface">
+                        <h3 className="font-bold text-text-main">Thông báo</h3>
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={handleMarkAllRead}
+                                className="text-xs font-bold text-primary hover:text-primary-hover flex items-center gap-1"
+                            >
+                                <Check size={14} /> Đọc tất cả
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="max-h-[400px] overflow-y-auto">
+                        {notifications.length === 0 ? (
+                            <div className="p-8 text-center text-text-muted flex flex-col items-center">
+                                <CheckCircle2 size={32} className="text-border mb-2" />
+                                <span className="text-sm font-medium">Bạn đã xem hết thông báo</span>
+                            </div>
+                        ) : (
+                            notifications.map((notif) => (
+                                <div
+                                    key={notif._id}
+                                    onClick={() => handleNotificationClick(notif)}
+                                    className={`p-4 border-b border-border cursor-pointer hover:bg-surface transition-colors flex gap-3 ${notif.isRead ? 'opacity-70' : 'bg-primary/5'}`}
+                                >
+                                    {!notif.isRead && (
+                                        <div className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0"></div>
+                                    )}
+                                    <div>
+                                        <div className={`text-sm ${notif.isRead ? 'font-medium text-text-muted' : 'font-bold text-text-main'}`}>
+                                            {notif.title}
+                                        </div>
+                                        <div className="text-xs text-text-muted mt-1 leading-relaxed">
+                                            {notif.message}
+                                        </div>
+                                        <div className="text-[10px] text-text-muted mt-2 font-medium">
+                                            {new Date(notif.createdAt).toLocaleString('vi-VN')}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
