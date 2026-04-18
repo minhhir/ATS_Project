@@ -1,128 +1,193 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { CandidateLayout } from '@/layout/CandidateLayout';
-import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
+import { User, Camera, FileText, UploadCloud, CheckCircle, BrainCircuit } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/api/axios';
-import { Save, UserCircle, FileText, UploadCloud } from 'lucide-react';
 
 export function SettingsPage() {
-    const { user } = useAuth();
+    // ✅ FIX 1: Dùng updateUser thay cho login
+    const { user, updateUser } = useAuth();
+
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
 
-    const [form, setForm] = useState({
-        name: '',
-        phone: '',
-        skills: '',
-        cvUrl: ''
-    });
+    const [name, setName] = useState('');
+    const [phone, setPhone] = useState('');
+    const [skills, setSkills] = useState(''); // ✅ FIX 4: Thêm State Skills
 
-    // Tải thông tin hiện tại của Ứng viên
+    const [avatarFile, setAvatarFile] = useState(null);
+    const [avatarPreview, setAvatarPreview] = useState(null);
+
+    const [cvFile, setCvFile] = useState(null);
+    const [currentCv, setCurrentCv] = useState(null);
+
+    const avatarInputRef = useRef(null);
+    const cvInputRef = useRef(null);
+
+    // ✅ FIX 3 & 4: Load dữ liệu chuẩn từ user object
     useEffect(() => {
         if (user) {
-            setForm({
-                name: user.name || '',
-                phone: user.phone || '',
-                skills: user.skills ? user.skills.join(', ') : '',
-                cvUrl: user.cvUrl || ''
-            });
+            setName(user.name || '');
+            setPhone(user.phone || '');
+            setSkills(user.skills?.join(', ') || '');
+            setAvatarPreview(user.avatar || null);
+            setCurrentCv(user.cvUrl || null);
         }
     }, [user]);
 
-    const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleAvatarChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setAvatarFile(file);
+            setAvatarPreview(URL.createObjectURL(file));
+        }
+    };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const handleCvChange = (e) => {
+        const file = e.target.files[0];
+        if (file) setCvFile(file);
+    };
+
+    const handleSave = async () => {
         setLoading(true);
-        setMessage('');
+        setSuccessMsg('');
         try {
-            // Gửi API lên Backend
-            await api.put('/auth/profile', {
-                name: form.name,
-                phone: form.phone,
-                skills: form.skills
-            });
-            setMessage('Lưu hồ sơ cá nhân thành công!');
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('phone', phone);
+            formData.append('skills', skills); // ✅ FIX 4: Gửi skills
+
+            if (avatarFile) formData.append('avatar', avatarFile);
+            if (cvFile) formData.append('cv', cvFile);
+
+            const { data } = await api.put('/auth/profile', formData);
+
+            // ✅ FIX 2: Đồng bộ User state toàn cục ngay lập tức
+            updateUser(data.data);
+            setCurrentCv(data.data.cvUrl); // ✅ FIX 3: Cập nhật lại Link CV mới
+
+            setSuccessMsg('Đã cập nhật thông tin thành công!');
+            setAvatarFile(null);
+            setCvFile(null);
+
         } catch (error) {
-            setMessage(error.response?.data?.message || 'Lưu thất bại. Vui lòng thử lại.');
+            alert(error.response?.data?.message || 'Có lỗi xảy ra khi lưu!');
         } finally {
             setLoading(false);
-            setTimeout(() => setMessage(''), 3000);
+            setTimeout(() => setSuccessMsg(''), 3000);
         }
     };
 
     return (
         <CandidateLayout>
-            <div className="mb-8 flex justify-between items-end">
+            <div className="max-w-4xl mx-auto space-y-8">
                 <div>
-                    <h1 className="text-2xl sm:text-3xl font-extrabold text-text-main">Cài đặt tài khoản</h1>
-                    <p className="text-text-muted mt-1 font-medium">Cập nhật hồ sơ và kỹ năng của bạn để nhà tuyển dụng dễ dàng tìm thấy.</p>
-                </div>
-                <Button onClick={handleSubmit} isLoading={loading} className="hidden sm:flex">
-                    <Save size={18} /> Lưu thay đổi
-                </Button>
-            </div>
-
-            {message && (
-                <div className={`p-4 mb-6 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2 ${message.includes('thành công') ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
-                    {message}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                {/* Cột trái: Sidebar Menu */}
-                <div className="lg:col-span-1 space-y-2">
-                    <button className="w-full flex items-center gap-3 px-4 py-3 bg-white text-primary border border-border shadow-sm rounded-xl font-bold">
-                        <UserCircle size={20} /> Hồ sơ cá nhân
-                    </button>
-                    <button className="w-full flex items-center gap-3 px-4 py-3 text-text-muted hover:bg-surface rounded-xl font-semibold transition-colors">
-                        <FileText size={20} /> Quản lý CV gốc (Comming Soon)
-                    </button>
+                    <h1 className="text-3xl font-black text-text-main mb-2">Cài đặt tài khoản</h1>
+                    <p className="text-text-muted font-medium">Quản lý thông tin cá nhân và hồ sơ ứng tuyển của bạn.</p>
                 </div>
 
-                {/* Cột phải: Form */}
-                <div className="lg:col-span-2 space-y-6 bg-white p-6 sm:p-8 rounded-2xl border border-border shadow-sm">
+                <div className="bg-white rounded-3xl p-8 border border-border shadow-sm">
+                    <h3 className="text-xl font-bold text-text-main mb-6 border-b border-border pb-4">Thông tin cơ bản</h3>
 
-                    <section>
-                        <div className="flex items-center gap-4 mb-6 pb-6 border-b border-border">
-                            <div className="w-20 h-20 rounded-full bg-primary-light flex items-center justify-center text-primary text-2xl font-black shrink-0 border-4 border-white shadow-md">
-                                {form.name?.charAt(0) || 'U'}
+                    <div className="flex flex-col sm:flex-row gap-8 items-start mb-8">
+                        <div className="flex flex-col items-center">
+                            <div className="relative w-32 h-32 rounded-full border-4 border-surface bg-surface overflow-hidden shadow-sm flex items-center justify-center">
+                                {avatarPreview ? (
+                                    <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    <User size={48} className="text-text-muted" />
+                                )}
+                            </div>
+                            <input type="file" accept="image/*" className="hidden" ref={avatarInputRef} onChange={handleAvatarChange} />
+                            <button onClick={() => avatarInputRef.current.click()} className="mt-4 flex items-center gap-2 text-sm font-bold text-primary hover:text-primary-dark transition-colors bg-primary/10 px-4 py-2 rounded-xl">
+                                <Camera size={16} /> Đổi ảnh
+                            </button>
+                        </div>
+
+                        <div className="flex-1 space-y-4 w-full">
+                            <div>
+                                <label className="block text-sm font-bold text-text-main mb-2">Họ và tên</label>
+                                <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border bg-surface font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-text-main text-lg mb-2">Ảnh đại diện</h3>
-                                <Button variant="outline" className="py-1.5 px-3 text-sm">
-                                    <UploadCloud size={16} /> Tải ảnh mới
-                                </Button>
+                                <label className="block text-sm font-bold text-text-main mb-2">Số điện thoại</label>
+                                <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border bg-surface font-medium focus:ring-2 focus:ring-primary/20 outline-none" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-text-main mb-2">Email (Không thể đổi)</label>
+                                <input type="text" value={user?.email || ''} disabled className="w-full px-4 py-3 rounded-xl border border-border bg-gray-100 text-text-muted font-medium cursor-not-allowed outline-none" />
                             </div>
                         </div>
-
-                        <h3 className="text-lg font-extrabold text-text-main mb-4">Thông tin cơ bản</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                            <Input label="Họ và tên" name="name" value={form.name} onChange={handleChange} />
-                            <Input label="Số điện thoại" name="phone" placeholder="VD: 0987654321" value={form.phone} onChange={handleChange} />
-                        </div>
-
-                        <div className="mt-5">
-                            <Input
-                                label="Kỹ năng chuyên môn (Cách nhau bằng dấu phẩy)"
-                                name="skills"
-                                placeholder="VD: React, Node.js, Python, Figma..."
-                                value={form.skills}
-                                onChange={handleChange}
-                            />
-                        </div>
-                    </section>
-
-                    <div className="pt-6 sm:hidden">
-                        <Button onClick={handleSubmit} isLoading={loading} className="w-full">
-                            <Save size={18} /> Lưu thay đổi
-                        </Button>
                     </div>
 
+                    {/* ✅ FIX 4: Render UI Kỹ năng */}
+                    <div>
+                        <label className="flex items-center gap-2 text-sm font-bold text-text-main mb-2">
+                            <BrainCircuit size={18} className="text-primary" /> Kỹ năng chuyên môn
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Ví dụ: React, Node.js, Python, UI/UX (Phân cách bằng dấu phẩy)"
+                            value={skills}
+                            onChange={(e) => setSkills(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-border bg-surface font-medium focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                        <p className="text-xs text-text-muted mt-2 font-medium">Dùng dấu phẩy để ngăn cách các kỹ năng của bạn.</p>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-3xl p-8 border border-border shadow-sm">
+                    <h3 className="text-xl font-bold text-text-main mb-6 border-b border-border pb-4">Quản lý CV gốc</h3>
+
+                    <div>
+                        <input type="file" accept=".pdf" className="hidden" ref={cvInputRef} onChange={handleCvChange} />
+                        <div
+                            onClick={() => cvInputRef.current.click()}
+                            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${cvFile ? 'border-primary bg-primary-light/30' : 'border-border hover:border-primary hover:bg-surface'}`}
+                        >
+                            <UploadCloud className={`mx-auto mb-3 ${cvFile ? 'text-primary' : 'text-text-muted'}`} size={40} />
+                            {cvFile ? (
+                                <div className="font-bold text-primary truncate px-4">{cvFile.name}</div>
+                            ) : (
+                                <>
+                                    <div className="font-bold text-text-main mb-2 text-lg">Click để tải lên CV mặc định</div>
+                                    <div className="text-sm text-text-muted font-medium">Chỉ hỗ trợ định dạng PDF (Max 5MB)</div>
+                                </>
+                            )}
+                        </div>
+
+                        {currentCv && !cvFile && (
+                            <div className="mt-4 p-4 bg-surface rounded-xl border border-border flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-primary shadow-sm">
+                                        <FileText size={20} />
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-text-main text-sm">CV hiện tại của bạn</div>
+                                        <div className="text-xs text-text-muted font-medium">Đã tải lên hệ thống</div>
+                                    </div>
+                                </div>
+                                <a href={currentCv} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary hover:underline">
+                                    Xem CV
+                                </a>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <Button onClick={handleSave} isLoading={loading} className="py-3 px-8 text-base">
+                        Lưu thay đổi
+                    </Button>
+                    {successMsg && (
+                        <span className="flex items-center gap-2 text-success font-bold animate-in fade-in slide-in-from-left-4">
+                            <CheckCircle size={20} /> {successMsg}
+                        </span>
+                    )}
                 </div>
             </div>
+            <ChangePasswordForm />
         </CandidateLayout>
     );
 }

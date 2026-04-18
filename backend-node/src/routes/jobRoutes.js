@@ -21,5 +21,6 @@ router.post('/', jobController.createJob);
 router.put('/:id', jobController.updateJob);
 router.delete('/:id', jobController.deleteJob);
 router.patch('/:id/feature', jobController.toggleFeatured);
+router.get('/stats/summary', protect, isRecruiter, jobController.getDashboardStats); S
 
 module.exports = router;

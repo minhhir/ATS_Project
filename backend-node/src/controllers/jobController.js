@@ -1,6 +1,7 @@
 const Job = require('../models/Job');
 const AppError = require('../utils/AppError');
 const mongoose = require('mongoose');
+const Application = require('../models/Application');
 
 // [GET] /api/jobs - Lấy danh sách Job (Có search, filter, pagination)
 exports.getJobs = async (req, res, next) => {
@@ -192,5 +193,40 @@ exports.getMyJobs = async (req, res, next) => {
             .lean();
 
         res.json({ success: true, data: jobs });
+    } catch (err) { next(err); }
+};
+// [GET] /api/jobs/dashboard-stats - Thống kê cho dashboard HR`
+exports.getDashboardStats = async (req, res, next) => {
+    try {
+        const recruiterId = req.user.id;
+
+        // 1. Lấy danh sách ID các Job của HR này
+        const jobs = await Job.find({ recruiter: recruiterId }).select('_id');
+        const jobIds = jobs.map(j => j._id);
+
+        // 2. Chạy song song các câu query để tối ưu hiệu năng
+        const [totalJobs, activeJobs, totalApps, recentApps] = await Promise.all([
+            Job.countDocuments({ recruiter: recruiterId }),
+            Job.countDocuments({ recruiter: recruiterId, isActive: true }),
+            Application.countDocuments({ job: { $in: jobIds } }),
+            Application.find({ job: { $in: jobIds } })
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .populate('job', 'title')
+                .populate('candidate', 'name email avatar')
+        ]);
+
+        res.json({
+            success: true,
+            data: {
+                stats: {
+                    totalJobs,
+                    activeJobs,
+                    totalApplications: totalApps,
+                    newApplications: recentApps.length // Hoặc query theo ngày
+                },
+                recentApplications: recentApps
+            }
+        });
     } catch (err) { next(err); }
 };

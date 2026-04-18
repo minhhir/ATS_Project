@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { LogOut, User, Briefcase } from 'lucide-react';
+import { LogOut, User, Briefcase, FileText } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/ui/Logo';
 import { NotificationBell } from '@/components/shared/NotificationBell';
@@ -22,7 +22,8 @@ export function CandidateLayout({ children }) {
                             <Briefcase size={18} />
                             Việc làm
                         </Link>
-                        <Link to="/applications" className="text-text-muted hover:text-primary font-semibold transition-colors">
+                        <Link to="/applications" className="text-text-muted hover:text-primary font-semibold transition-colors flex items-center gap-2">
+                            <FileText size={18} />
                             Đơn đã nộp
                         </Link>
                     </nav>
@@ -34,7 +35,6 @@ export function CandidateLayout({ children }) {
                             <span className="text-sm font-bold text-primary">{user?.name || 'Ứng viên'}</span>
                         </Link>
 
-                        {/* ✅ XÓA CÁI LINK TĨNH CŨ ĐI, THAY BẰNG COMPONENT CHUÔNG REAL-TIME NÀY */}
                         <NotificationBell />
 
                         <button

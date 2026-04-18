@@ -6,17 +6,12 @@ const { uploadToCloudinary } = require('../middlewares/upload');
 const aiService = require('../services/aiService');
 const Notification = require('../models/Notification');
 
-// [POST] /api/applications/:jobId/apply - Ứng viên nộp CV
 exports.applyForJob = async (req, res, next) => {
     try {
         const { jobId } = req.params;
         const candidateId = req.user.id;
 
-        // FIX: Validate jobId trước để tránh Mongoose CastError
-        if (!mongoose.Types.ObjectId.isValid(jobId)) {
-            throw new AppError('jobId không hợp lệ', 400);
-        }
-
+        if (!mongoose.Types.ObjectId.isValid(jobId)) throw new AppError('jobId không hợp lệ', 400);
         if (!req.file) throw new AppError('Vui lòng đính kèm file CV (PDF)', 400);
 
         const job = await Job.findOne({ _id: jobId, isActive: true });
@@ -44,9 +39,9 @@ exports.applyForJob = async (req, res, next) => {
             recipient: job.recruiter,
             title: 'Có ứng viên mới!',
             message: `Ứng viên vừa nộp CV vào vị trí "${job.title}".`,
-            link: `/recruiter/jobs/${jobId}/applicants` // Link thẳng vào danh sách ứng viên của job đó
+            link: `/recruiter/jobs/${jobId}/applicants`
         });
-        // Fire-and-forget: AI chấm điểm ngầm, không làm trễ response
+
         aiService.triggerAIScoring(application._id, {
             cvUrl: uploadResult.secure_url,
             jdText: job.requirements
@@ -58,55 +53,90 @@ exports.applyForJob = async (req, res, next) => {
         res.status(201).json({
             success: true,
             message: 'Nộp đơn thành công',
-            data: {
-                id: application._id,
-                jobId: application.job,
-                cvUrl: application.cvUrl,
-                status: application.status,
-                aiStatus: application.aiStatus,
-                createdAt: application.createdAt,
-            }
+            data: application
         });
     } catch (err) { next(err); }
 };
 
-// [GET] /api/applications/job/:jobId - HR xem danh sách ứng viên
+// ✅ FIX 2: Thay thế Find N+1 bằng Aggregation Pipeline với $lookup để tối ưu tốc độ
 exports.getApplicationsByJob = async (req, res, next) => {
     try {
         const { jobId } = req.params;
-        const { page, limit, sort } = req.query;
+        const { page, limit, sort, keyword, scoreFilter } = req.query;
 
-        if (!mongoose.Types.ObjectId.isValid(jobId))
-            throw new AppError('Job ID không hợp lệ', 400);
+        if (!mongoose.Types.ObjectId.isValid(jobId)) throw new AppError('Job ID không hợp lệ', 400);
 
         const job = await Job.findById(jobId);
         if (!job) throw new AppError('Không tìm thấy Job', 404);
 
         if (job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
-            throw new AppError('Bạn không có quyền xem danh sách này', 403);
+            throw new AppError('Bạn không có quyền xem', 403);
         }
 
         const pageNum = Math.max(1, parseInt(page) || 1);
         const limitNum = Math.min(50, parseInt(limit) || 20);
         const skip = (pageNum - 1) * limitNum;
 
-        // Cho phép sort từ query: aiScore (mặc định), newest, featured
+        let pipeline = [
+            { $match: { job: new mongoose.Types.ObjectId(jobId) } }
+        ];
+
+        // 1. Lọc theo điểm AI trước
+        if (scoreFilter === 'high') pipeline.push({ $match: { aiScore: { $gte: 80 } } });
+        else if (scoreFilter === 'medium') pipeline.push({ $match: { aiScore: { $gte: 50, $lt: 80 } } });
+        else if (scoreFilter === 'low') pipeline.push({ $match: { aiScore: { $lt: 50 } } });
+
+        // 2. Lookup (Join) với bảng Users để lấy thông tin ứng viên
+        pipeline.push({
+            $lookup: {
+                from: 'users',
+                localField: 'candidate',
+                foreignField: '_id',
+                as: 'candidate'
+            }
+        });
+        pipeline.push({ $unwind: '$candidate' }); // Biến mảng thành object
+
+        // 3. Lọc theo Keyword (Tên/Email) TRÊN kết quả đã Join
+        if (keyword) {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { 'candidate.name': { $regex: keyword, $options: 'i' } },
+                        { 'candidate.email': { $regex: keyword, $options: 'i' } }
+                    ]
+                }
+            });
+        }
+
+        // 4. Giấu password và các trường dư thừa của User
+        pipeline.push({
+            $project: {
+                'candidate.password': 0,
+                'candidate.__v': 0
+            }
+        });
+
+        // 5. Sắp xếp
         const sortMap = {
             aiScore: { aiScore: -1 },
             newest: { createdAt: -1 },
+            oldest: { createdAt: 1 },
             featured: { isFeatured: -1, aiScore: -1 },
         };
-        const sortBy = sortMap[sort] || { aiScore: -1 };
+        pipeline.push({ $sort: sortMap[sort] || { createdAt: -1 } });
 
-        const [applications, total] = await Promise.all([
-            Application.find({ job: jobId })
-                .populate('candidate', 'name email phone avatar')
-                .sort(sortBy)
-                .skip(skip)
-                .limit(limitNum)
-                .lean(),
-            Application.countDocuments({ job: jobId })
-        ]);
+        // 6. Phân trang bằng $facet (Trả về Data và Total count cùng lúc)
+        pipeline.push({
+            $facet: {
+                metadata: [{ $count: "total" }],
+                data: [{ $skip: skip }, { $limit: limitNum }]
+            }
+        });
+
+        const result = await Application.aggregate(pipeline);
+        const total = result[0].metadata.length > 0 ? result[0].metadata[0].total : 0;
+        const applications = result[0].data;
 
         res.json({
             success: true,
@@ -118,30 +148,25 @@ exports.getApplicationsByJob = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-// [PATCH] /api/applications/:id/status - HR duyệt/từ chối CV
-// [PATCH] /api/applications/:id/status - HR duyệt/từ chối CV
 exports.updateApplicationStatus = async (req, res, next) => {
     try {
         const { status, recruiterNote } = req.body;
         const validStatuses = ['applied', 'reviewing', 'shortlisted', 'interviewed', 'offered', 'rejected'];
 
-        if (!validStatuses.includes(status)) {
-            throw new AppError('Trạng thái không hợp lệ', 400);
-        }
+        if (!validStatuses.includes(status)) throw new AppError('Trạng thái không hợp lệ', 400);
 
         const application = await Application.findById(req.params.id).populate('job');
-        if (!application) throw new AppError('Không tìm thấy đơn ứng tuyển', 404);
-        if (!application.job) throw new AppError('Job liên kết không còn tồn tại', 404);
+        if (!application) throw new AppError('Không tìm thấy đơn', 404);
+        if (!application.job) throw new AppError('Job không còn tồn tại', 404);
 
         if (application.job.recruiter.toString() !== req.user.id && req.user.role !== 'admin') {
-            throw new AppError('Bạn không có quyền thao tác', 403);
+            throw new AppError('Bạn không có quyền', 403);
         }
 
         application.status = status;
         if (recruiterNote !== undefined) application.recruiterNote = recruiterNote;
         await application.save();
 
-        // ✅ TẠO THÔNG BÁO BẮN VỀ CHO ỨNG VIÊN (CANDIDATE)
         const statusMap = {
             'reviewing': 'Đang xem xét',
             'shortlisted': 'Vào danh sách rút gọn',
@@ -151,20 +176,16 @@ exports.updateApplicationStatus = async (req, res, next) => {
         };
 
         await Notification.create({
-            recipient: application.candidate, // Người nhận là Ứng viên
+            recipient: application.candidate,
             title: 'Cập nhật trạng thái hồ sơ',
-            message: `Hồ sơ ứng tuyển vị trí "${application.job.title}" của bạn đã được chuyển sang trạng thái: ${statusMap[status]}.`,
-            link: '/applications' // Link trỏ về trang Quản lý CV của Ứng viên
+            message: `Hồ sơ ứng tuyển vị trí "${application.job.title}" của bạn chuyển sang: ${statusMap[status]}.`,
+            link: '/applications'
         });
 
-        res.json({
-            success: true,
-            message: `Đã cập nhật trạng thái thành ${status}`,
-            data: application
-        });
+        res.json({ success: true, message: `Cập nhật thành ${status}`, data: application });
     } catch (err) { next(err); }
 };
-// [PATCH] /api/applications/:id/feature - HR đánh dấu ứng viên nổi bật
+
 exports.toggleFeatured = async (req, res, next) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) throw new AppError('ID không hợp lệ', 400);
@@ -179,14 +200,13 @@ exports.toggleFeatured = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-// [POST] /api/applications/:id/score - Trigger AI chấm lại thủ công (HR)
 exports.retriggerScore = async (req, res, next) => {
     try {
         if (!mongoose.Types.ObjectId.isValid(req.params.id)) throw new AppError('ID không hợp lệ', 400);
         const app = await Application.findById(req.params.id).populate('job');
         if (!app) throw new AppError('Không tìm thấy đơn', 404);
         if (app.job.recruiter?.toString() !== req.user.id && req.user.role !== 'admin') {
-            throw new AppError('Bạn không có quyền xem danh sách này', 403);
+            throw new AppError('Không có quyền', 403);
         }
         aiService.triggerAIScoring(app._id, {
             cvUrl: app.cvUrl,
@@ -199,12 +219,13 @@ exports.retriggerScore = async (req, res, next) => {
         res.json({ success: true, message: 'Đã gửi yêu cầu chấm lại AI' });
     } catch (err) { next(err); }
 };
+
 exports.getMyApplications = async (req, res, next) => {
     try {
         const applications = await Application.find({ candidate: req.user.id })
             .populate({
                 path: 'job',
-                select: 'title location type level recruiter',
+                select: 'title location type level isActive recruiter',
                 populate: { path: 'recruiter', select: 'companyName companyLogo' }
             })
             .sort({ createdAt: -1 })

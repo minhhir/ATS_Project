@@ -6,6 +6,7 @@ import { Button } from '@/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/api/axios';
 import { Save, Building2, UserCircle } from 'lucide-react';
+import { ChangePasswordForm } from '@/components/shared/ChangePasswordForm';
 
 export function SettingsPage() {
     const { user } = useAuth();
@@ -121,6 +122,7 @@ export function SettingsPage() {
 
                 </div>
             </div>
+            <ChangePasswordForm />
         </RecruiterLayout>
     );
 }

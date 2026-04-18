@@ -1,15 +1,26 @@
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from services.extractor import extract_text_from_url
 from services.scorer import score_cv
 
-app = FastAPI(title='Mini ATS AI Service', version='1.0')
+MAX_CONCURRENT_TASKS = 5
+semaphore = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global semaphore
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_TASKS)
+    yield
+    # Dọn dẹp tài nguyên (nếu có) khi app tắt
+
+app = FastAPI(title='Mini ATS AI Service', version='1.0', lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5000"], # Cho phép React và Node gọi
+    allow_origins=["http://localhost:5173", "http://localhost:5000"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -18,7 +29,6 @@ app.add_middleware(
 class ScoreRequest(BaseModel):
     cv_url: str
     jd_text: str
-
 
 class ScoreResponse(BaseModel):
     score: float
@@ -33,26 +43,28 @@ def health_check():
 
 @app.post('/score', response_model=ScoreResponse)
 async def score_application(req: ScoreRequest):
-    try:
-        # I/O-bound: tải PDF từ Cloudinary
-        cv_text = await extract_text_from_url(req.cv_url)
+    # Dùng Semaphore bọc luồng nặng
+    async with semaphore:
+        try:
+            # I/O-bound: tải PDF từ Cloudinary
+            cv_text = await extract_text_from_url(req.cv_url)
 
-        if not cv_text or len(cv_text) < 50:
-            raise HTTPException(
-                status_code=422,
-                detail='PDF quá ngắn hoặc không có text thuần (có thể là ảnh scan).'
-            )
+            if not cv_text or len(cv_text) < 50:
+                raise HTTPException(
+                    status_code=422,
+                    detail='PDF quá ngắn hoặc không có text thuần (có thể là ảnh scan).'
+                )
 
-        result = await asyncio.to_thread(score_cv, cv_text, req.jd_text)
-        return result
+            # CPU-bound: Chạy thuật toán chấm điểm TF-IDF trên Thread pool
+            result = await asyncio.to_thread(score_cv, cv_text, req.jd_text)
+            return result
 
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    # Exception không xác định → trả 500 (lỗi phía server)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
