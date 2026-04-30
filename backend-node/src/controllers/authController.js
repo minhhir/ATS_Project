@@ -14,7 +14,16 @@ exports.register = async (req, res, next) => {
     try {
         const { tokens, user } = await authService.register(req.body);
         res.cookie('refreshToken', tokens.refreshToken, COOKIE_OPTIONS);
-        res.status(201).json({ success: true, accessToken: tokens.accessToken, user: { id: user._id, name: user.name, role: user.role, email: user.email } });
+
+        // Trả về full object user (trừ password) để Frontend có đủ data ngay lập tức
+        const userResponse = user.toObject();
+        delete userResponse.password;
+
+        res.status(201).json({
+            success: true,
+            accessToken: tokens.accessToken,
+            user: userResponse
+        });
     } catch (err) { next(err); }
 };
 
@@ -22,37 +31,55 @@ exports.login = async (req, res, next) => {
     try {
         const { email, password, rememberMe } = req.body;
         const { tokens, user } = await authService.login({ email, password });
-        const CURRENT_COOKIE_OPTIONS = { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' };
-        if (rememberMe) CURRENT_COOKIE_OPTIONS.maxAge = 7 * 24 * 60 * 60 * 1000;
-        res.cookie('refreshToken', tokens.refreshToken, CURRENT_COOKIE_OPTIONS);
-        res.json({ success: true, accessToken: tokens.accessToken, user: { id: user._id, name: user.name, role: user.role, email: user.email } });
+
+        const cookieOptions = { ...COOKIE_OPTIONS };
+        if (!rememberMe) delete cookieOptions.maxAge;
+        res.cookie('refreshToken', tokens.refreshToken, cookieOptions);
+
+        const userResponse = user.toObject();
+        delete userResponse.password;
+
+        res.status(200).json({
+            success: true,
+            accessToken: tokens.accessToken, // ✅ ĐÃ FIX: Lấy từ tokens.accessToken
+            user: userResponse
+        });
     } catch (err) { next(err); }
 };
 
 exports.refresh = async (req, res, next) => {
     try {
         const token = req.cookies.refreshToken;
-        if (!token) return res.status(401).json({ message: 'Không tìm thấy refresh token' });
+        if (!token) throw new AppError('Không tìm thấy refresh token', 401);
         const { accessToken, refreshToken } = await authService.refreshToken(token);
         res.cookie('refreshToken', refreshToken, COOKIE_OPTIONS);
-        res.json({ accessToken });
+        res.json({ success: true, accessToken });
     } catch (err) { next(err); }
 };
 
 exports.logout = (req, res) => {
-    res.clearCookie('refreshToken');
+    const { maxAge, ...clearOptions } = COOKIE_OPTIONS;
+    res.clearCookie('refreshToken', clearOptions);
     res.json({ success: true, message: 'Đăng xuất thành công' });
 };
 
-exports.getMe = (req, res) => {
-    const user = req.user;
-    res.json({ success: true, user: { id: user._id, name: user.name, role: user.role, email: user.email, avatar: user.avatar, phone: user.phone, skills: user.skills, cvUrl: user.cvUrl, companyName: user.companyName, companyLogo: user.companyLogo, companyWebsite: user.companyWebsite, companyDesc: user.companyDesc } });
+exports.getMe = async (req, res, next) => {
+    try {
+        // ✅ ĐÃ FIX: Không tự tạo object nữa, trả về toàn bộ dữ liệu từ DB (trừ password)
+        const user = await User.findById(req.user.id).select('-password');
+        res.status(200).json({
+            success: true,
+            user: user
+        });
+    } catch (error) {
+        next(error);
+    }
 };
 
 exports.forgotPassword = async (req, res, next) => {
     try {
         const { email } = req.body;
-        if (!email) return res.status(400).json({ message: 'Vui lòng nhập email' });
+        if (!email) throw new AppError('Vui lòng nhập email', 400);
         await authService.forgotPassword({ email });
         res.json({ success: true, message: 'Nếu email tồn tại, chúng tôi đã gửi mã xác nhận.' });
     } catch (err) { next(err); }
@@ -61,7 +88,7 @@ exports.forgotPassword = async (req, res, next) => {
 exports.verifyOTP = async (req, res, next) => {
     try {
         const { email, otp } = req.body;
-        if (!email || !otp) return res.status(400).json({ message: 'Vui lòng cung cấp email và mã OTP' });
+        if (!email || !otp) throw new AppError('Vui lòng cung cấp email và mã OTP', 400);
         await authService.verifyOTP({ email, otp: String(otp) });
         res.json({ success: true, message: 'OTP hợp lệ. Bạn có thể đặt lại mật khẩu.' });
     } catch (err) { next(err); }
@@ -70,7 +97,7 @@ exports.verifyOTP = async (req, res, next) => {
 exports.resetPassword = async (req, res, next) => {
     try {
         const { email, otp, newPassword } = req.body;
-        if (!email || !otp || !newPassword) return res.status(400).json({ message: 'Thiếu thông tin bắt buộc' });
+        if (!email || !otp || !newPassword) throw new AppError('Thiếu thông tin bắt buộc', 400);
         await authService.resetPassword({ email, otp: String(otp), newPassword });
         res.json({ success: true, message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại.' });
     } catch (err) { next(err); }
@@ -80,20 +107,26 @@ exports.changePassword = async (req, res, next) => {
     try {
         const { currentPassword, newPassword } = req.body;
         if (!currentPassword || !newPassword) throw new AppError('Vui lòng nhập đầy đủ mật khẩu!', 400);
-        const user = await User.findById(req.user.id).select('+password');
+        if (newPassword.length < 6) throw new AppError('Mật khẩu mới phải ít nhất 6 ký tự', 400);
+
+        const userId = req.user._id || req.user.id;
+        const user = await User.findById(userId).select('+password');
         if (!user) throw new AppError('Không tìm thấy người dùng', 404);
+
         const isMatch = await user.comparePassword(currentPassword);
         if (!isMatch) throw new AppError('Mật khẩu hiện tại không chính xác', 401);
+
         user.password = newPassword;
         await user.save();
+
         res.json({ success: true, message: 'Đổi mật khẩu thành công!' });
-    } catch (err) { next(err); }
+    } catch (err) {
+        next(err);
+    }
 };
 
-// ✅ FIX LỖI "Cannot read properties of undefined (reading 'name')"
 exports.updateProfile = async (req, res, next) => {
     try {
-        // Cứu cánh an toàn: Nếu upload.fields hỏng, req.body vẫn là một object rỗng
         const body = req.body || {};
         const updateData = {};
 
@@ -121,7 +154,7 @@ exports.updateProfile = async (req, res, next) => {
             }
         }
 
-        const user = await User.findByIdAndUpdate(req.user.id, updateData, { returnDocument: 'after' }).select('-password');
+        const user = await User.findByIdAndUpdate(req.user.id, updateData, { new: true }).select('-password');
         res.json({ success: true, message: 'Cập nhật thành công!', data: user });
     } catch (err) {
         console.error(' [LỖI UPDATE PROFILE]:', err);

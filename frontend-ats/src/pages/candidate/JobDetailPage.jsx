@@ -100,9 +100,9 @@ export function JobDetailPage() {
                 <div className="text-center py-20">
                     <h2 className="text-2xl font-bold text-text-main mb-2">Không tìm thấy công việc!</h2>
                     <p className="text-text-muted mb-6">Công việc này có thể đã bị xóa hoặc hết hạn.</p>
-                    <button onClick={() => navigate(-1)}>
-                        <Button>Quay lại</Button>
-                    </button>
+                    <Button onClick={() => navigate(-1)}>
+                        Quay lại
+                    </Button>
                 </div>
             </Layout>
         );

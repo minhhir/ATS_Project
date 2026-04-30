@@ -25,19 +25,19 @@ const userSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true },
     isVerified: { type: Boolean, default: false },
 
-    // OTP khôi phục mật khẩu (Giữ nguyên tên cũ của bạn để không hỏng code, nhưng giấu đi)
-    otp: { type: String, select: false },
-    otpExpires: { type: Date, select: false }
+    // OTP khôi phục mật khẩu (hash để không lộ OTP gốc nếu DB bị leak)
+    resetOTPHash: { type: String, select: false },
+    resetOTPExpiry: { type: Date, select: false },
+    resetOTPVerified: { type: Boolean, default: false, select: false }
 }, { timestamps: true });
 
-userSchema.pre('save', async function (next) {
-    if (!this.isModified('password')) return next();
-
+userSchema.pre('save', async function () {
+    if (!this.isModified('password')) return;
     this.password = await bcrypt.hash(this.password, 12);
-    next();
 });
 
 userSchema.methods.comparePassword = async function (candidatePassword) {
+    if (!this.password) return false; // Tránh lỗi 500 khi so sánh với undefined
     return bcrypt.compare(candidatePassword, this.password);
 };
 

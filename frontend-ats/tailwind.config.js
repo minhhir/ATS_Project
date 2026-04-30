@@ -1,3 +1,6 @@
+import forms from '@tailwindcss/forms';
+import animate from 'tailwindcss-animate';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -29,9 +32,7 @@ export default {
     },
   },
   plugins: [
-    require('@tailwindcss/forms')({
-      strategy: 'class',
-    }),
-    require('tailwindcss-animate'),
+    forms({ strategy: 'class' }),
+    animate,
   ],
 }

@@ -9,7 +9,7 @@ export function LandingPage() {
 
     // Nếu đã đăng nhập, đá thẳng vào Dashboard tương ứng
     if (!loading && user) {
-        const home = { candidate: '/jobs', recruiter: '/recruiter/dashboard', admin: '/admin/dashboard' };
+        const home = { candidate: '/candidate/jobs', recruiter: '/recruiter/dashboard', admin: '/admin/dashboard' };
         return <Navigate to={home[user.role] || '/login'} replace />;
     }
 

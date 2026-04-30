@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, FileText, Settings, LogOut, Menu, X, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, Settings, LogOut, Menu, X, ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/ui/Logo';
 
-
-export function CandidateLayout({ children }) {
+export function AdminLayout({ children }) {
     const { user, logout } = useAuth();
     const location = useLocation();
     const [mobileOpen, setMobileOpen] = useState(false);
 
+    // Các tính năng "độc quyền" của Admin
     const navItems = [
-        { name: 'Tìm việc làm', path: '/candidate/jobs', icon: Search },
-        { name: 'Đơn ứng tuyển', path: '/candidate/applications', icon: FileText },
-        { name: 'Cài đặt', path: '/candidate/settings', icon: Settings },
+        { name: 'Tổng quan', path: '/admin/dashboard', icon: LayoutDashboard },
+        { name: 'Người dùng', path: '/admin/users', icon: Users },
+        { name: 'Việc làm & Tin', path: '/admin/jobs', icon: Briefcase },
+        { name: 'Cài đặt hệ thống', path: '/admin/settings', icon: Settings },
     ];
 
     const sidebarContent = (
@@ -26,7 +27,7 @@ export function CandidateLayout({ children }) {
             </div>
 
             <div className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
-                <div className="text-xs font-bold text-text-muted uppercase tracking-wider mb-4 px-2">Dành cho ứng viên</div>
+                <div className="text-xs font-bold text-text-muted uppercase tracking-wider mb-4 px-2">Quản trị viên</div>
                 {navItems.map((item) => {
                     const isActive = location.pathname.includes(item.path);
                     const Icon = item.icon;
@@ -35,7 +36,7 @@ export function CandidateLayout({ children }) {
                             key={item.path}
                             to={item.path}
                             onClick={() => setMobileOpen(false)}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-semibold transition-all ${isActive ? 'bg-primary-light/50 text-primary' : 'text-text-muted hover:bg-surface hover:text-text-main'}`}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-bold transition-all ${isActive ? 'bg-primary-light/50 text-primary' : 'text-text-muted hover:bg-surface hover:text-text-main'}`}
                         >
                             <Icon size={20} className={isActive ? 'text-primary' : 'text-text-muted'} />
                             {item.name}
@@ -46,28 +47,16 @@ export function CandidateLayout({ children }) {
 
             <div className="p-4 border-t border-border space-y-2">
                 <div className="flex items-center gap-3 px-2 mb-4">
-                    {/* Avatar ứng viên */}
-                    <div className="w-10 h-10 rounded-full border border-border bg-surface flex items-center justify-center overflow-hidden text-primary font-bold shrink-0 shadow-sm">
-                        {user?.avatar ? (
-                            <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                        ) : (
-                            user?.name?.charAt(0)?.toUpperCase() || 'U'
-                        )}
+                    <div className="w-10 h-10 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-center text-primary shrink-0 shadow-sm">
+                        <ShieldCheck size={22} />
                     </div>
                     <div className="flex-1 overflow-hidden">
-                        <div className="font-bold text-sm text-text-main truncate">{user?.name || 'Ứng viên'}</div>
-                        <div className="text-xs text-text-muted truncate font-medium">{user?.email || 'Tài khoản'}</div>
+                        <div className="font-bold text-sm text-text-main truncate">{user?.name || 'Admin'}</div>
+                        <div className="text-xs text-success font-black tracking-wide">SUPER ADMIN</div>
                     </div>
                 </div>
 
-                <Link to="/notifications" className="flex items-center justify-between w-full px-3 py-2.5 text-sm font-semibold text-text-muted hover:bg-surface hover:text-text-main rounded-lg transition-colors">
-                    <div className="flex items-center gap-3">
-                        <Bell size={18} /> Thông báo
-                    </div>
-                    <span className="w-2 h-2 bg-danger rounded-full"></span>
-                </Link>
-
-                <button onClick={logout} className="flex items-center gap-3 w-full px-3 py-2.5 text-sm font-semibold text-danger hover:bg-danger/10 rounded-lg transition-colors">
+                <button onClick={logout} className="flex items-center justify-center gap-2 w-full px-3 py-2.5 text-sm font-bold text-danger hover:bg-danger/10 rounded-xl transition-colors">
                     <LogOut size={18} /> Đăng xuất
                 </button>
             </div>
@@ -99,7 +88,7 @@ export function CandidateLayout({ children }) {
                         <Menu size={24} />
                     </button>
                 </header>
-                <div className="flex-1 p-4 sm:p-8 w-full max-w-6xl mx-auto">{children}</div>
+                <div className="flex-1 p-4 sm:p-8 w-full max-w-7xl mx-auto">{children}</div>
             </main>
         </div>
     );

@@ -3,17 +3,14 @@ import { Link } from 'react-router-dom';
 import { RecruiterLayout } from '@/layout/RecruiterLayout';
 import { Button } from '@/ui/Button';
 import api from '@/api/axios';
-import { useAuth } from '@/context/AuthContext';
 import { Plus, Edit, Trash2, Star, Loader2, Briefcase } from 'lucide-react';
 
 export function JobsManagePage() {
-    const { user } = useAuth();
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchMyJobs();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchMyJobs = async () => {
@@ -41,7 +38,7 @@ export function JobsManagePage() {
         try {
             const { data } = await api.patch(`/jobs/${id}/feature`);
             setJobs(jobs.map(job => job._id === id ? { ...job, isFeatured: data.isFeatured } : job));
-        } catch (error) {
+        } catch {
             alert('Không thể cập nhật trạng thái nổi bật');
         }
     };

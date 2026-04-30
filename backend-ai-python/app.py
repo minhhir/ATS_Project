@@ -29,6 +29,7 @@ app.add_middleware(
 class ScoreRequest(BaseModel):
     cv_url: str
     jd_text: str
+    jd_skills: list[str] | None = None
 
 class ScoreResponse(BaseModel):
     score: float
@@ -55,8 +56,8 @@ async def score_application(req: ScoreRequest):
                     detail='PDF quá ngắn hoặc không có text thuần (có thể là ảnh scan).'
                 )
 
-            # CPU-bound: Chạy thuật toán chấm điểm TF-IDF trên Thread pool
-            result = await asyncio.to_thread(score_cv, cv_text, req.jd_text)
+            # CPU-bound: Chạy embedding + scoring trên Thread pool để không chặn event loop
+            result = await asyncio.to_thread(score_cv, cv_text, req.jd_text, req.jd_skills)
             return result
 
         except HTTPException:

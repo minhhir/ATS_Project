@@ -1,292 +1,186 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom'; // ✅ FIX 1: Đã import useParams
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RecruiterLayout } from '@/layout/RecruiterLayout';
-import { Button } from '@/ui/Button';
-import {
-    FileText, User, MapPin, Calendar, ExternalLink, Briefcase,
-    CheckCircle, XCircle, Search, Filter, SortDesc, SortAsc
-} from 'lucide-react';
+import { BrainCircuit, FileText, CheckCircle, XCircle, Clock, User, AlertTriangle } from 'lucide-react';
 import api from '@/api/axios';
+import { Button } from '@/ui/Button';
 
 export function CandidatesManagePage() {
-    const location = useLocation();
-    const { jobId: paramJobId } = useParams();
+    const [searchParams] = useSearchParams();
+    const initialJobId = searchParams.get('jobId') || 'all';
 
-    // Lấy jobId từ URL (Hỗ trợ cả 2 dạng: /candidates?jobId=123 HOẶC /jobs/123/applicants)
-    const queryParams = new URLSearchParams(location.search);
-    const initialJobId = paramJobId || queryParams.get('jobId');
-
+    const [applications, setApplications] = useState([]);
     const [jobs, setJobs] = useState([]);
-    const [selectedJob, setSelectedJob] = useState(initialJobId || '');
-    const [candidates, setCandidates] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const [selectedJob, setSelectedJob] = useState(initialJobId);
+    const [loading, setLoading] = useState(true);
 
-    // ==========================================
-    // ✅ STATE DÀNH RIÊNG CHO BỘ LỌC (FILTERS)
-    // ==========================================
-    const [searchTerm, setSearchTerm] = useState('');
-    const [scoreFilter, setScoreFilter] = useState('all');
-    const [dateSort, setDateSort] = useState('desc');
-
-    // Lấy danh sách Job của HR này
+    // Lấy danh sách Job đưa vào Dropdown
     useEffect(() => {
         const fetchJobs = async () => {
             try {
-                const { data } = await api.get('/jobs/my-jobs');
+                const { data } = await api.get('/jobs/recruiter');
                 setJobs(data.data);
-                // ✅ FIX 2: Thay selectedJob bằng initialJobId để tránh Infinite Loop
-                if (data.data.length > 0 && !initialJobId) {
-                    setSelectedJob(data.data[0]._id);
-                }
-            } catch (error) {
-                console.error('Lỗi lấy danh sách công việc', error);
-            }
+            } catch { console.error('Lỗi lấy Jobs'); }
         };
         fetchJobs();
-    }, []); // ✅ FIX 2: Dependency array rỗng, chỉ chạy 1 lần khi mount
+    }, []);
 
-    // Lấy danh sách Ứng viên khi chọn 1 Job
+    // Lấy danh sách Ứng viên theo Job
     useEffect(() => {
-        if (!selectedJob) return;
-        const fetchCandidates = async () => {
+        const fetchApps = async () => {
             setLoading(true);
             try {
                 const { data } = await api.get(`/applications/job/${selectedJob}`);
-                setCandidates(data.data);
-            } catch (error) {
-                console.error('Lỗi lấy danh sách ứng viên', error);
-            } finally {
-                setLoading(false);
-            }
+                setApplications(data.data);
+            } catch { console.error('Lỗi lấy Ứng viên'); }
+            setLoading(false);
         };
-        fetchCandidates();
+        fetchApps();
     }, [selectedJob]);
 
-    // ✅ FIX 3: Gọi API cập nhật trạng thái CV
-    const handleUpdateStatus = async (appId, status) => {
+    // Đổi trạng thái (Đang chờ, Từ chối, Nhận...)
+    const handleStatusChange = async (appId, status) => {
         try {
             await api.patch(`/applications/${appId}/status`, { status });
-            // Cập nhật local state để UI phản hồi ngay lập tức
-            setCandidates(prev =>
-                prev.map(app => app._id === appId ? { ...app, status } : app)
-            );
-        } catch (err) {
-            console.error('Lỗi cập nhật trạng thái:', err);
-            alert(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật trạng thái');
+            setApplications(apps => apps.map(app => app._id === appId ? { ...app, status } : app));
+        } catch { alert('Lỗi cập nhật trạng thái'); }
+    };
+    // Báo cáo ứng viên (CV giả mạo, thông tin sai lệch...)
+    const handleReport = async (appId) => {
+        const reason = window.prompt('Nhập lý do báo cáo ứng viên này (v dụ: CV giả mạo, thông tin sai lệch):');
+        if (!reason) return;
+
+        try {
+            await api.post(`/applications/${appId}/report`, { reason });
+            alert('Đã gửi báo cáo cho Quản trị viên xử lý!');
+        } catch (error) {
+            alert(error.response?.data?.message || 'Lỗi gửi báo cáo');
         }
     };
-
-    // ==========================================
-    // ✅ LOGIC LỌC VÀ SẮP XẾP
-    // ==========================================
-    const filteredAndSortedCandidates = useMemo(() => {
-        let result = [...candidates];
-
-        if (searchTerm) {
-            const lowerSearch = searchTerm.toLowerCase();
-            result = result.filter(app =>
-                app.candidate?.name?.toLowerCase().includes(lowerSearch) ||
-                app.candidate?.email?.toLowerCase().includes(lowerSearch)
-            );
+    // Chấm lại điểm AI (chạy nền, poll lại danh sách sau vài giây)
+    const handleReScore = async (appId) => {
+        try {
+            await api.post(`/applications/${appId}/score`);
+            setApplications(apps => apps.map(app => app._id === appId ? { ...app, aiStatus: 'processing' } : app));
+            alert('Đang gửi CV sang server Python để phân tích. Điểm sẽ tự cập nhật sau 5-10 giây.');
+            setTimeout(async () => {
+                try {
+                    const { data } = await api.get(`/applications/job/${selectedJob}`);
+                    setApplications(data.data);
+                } catch { /* bỏ qua */ }
+            }, 8000);
+        } catch (error) {
+            alert(error.response?.data?.message || 'Lỗi! Hãy kiểm tra Terminal Node.js và Python.');
         }
-
-        if (scoreFilter !== 'all') {
-            result = result.filter(app => {
-                const score = app.aiScore || 0;
-                if (scoreFilter === 'high') return score >= 80;
-                if (scoreFilter === 'medium') return score >= 50 && score < 80;
-                if (scoreFilter === 'low') return score < 50;
-                return true;
-            });
-        }
-
-        result.sort((a, b) => {
-            const dateA = new Date(a.createdAt).getTime();
-            const dateB = new Date(b.createdAt).getTime();
-            return dateSort === 'desc' ? dateB - dateA : dateA - dateB;
-        });
-
-        return result;
-    }, [candidates, searchTerm, scoreFilter, dateSort]);
-
-
-    // Helper UI: Màu sắc cho điểm AI
-    const getScoreColor = (score) => {
-        if (!score) return 'bg-surface text-text-muted border-border';
-        if (score >= 80) return 'bg-success/10 text-success border-success/20';
-        if (score >= 50) return 'bg-warning/10 text-warning border-warning/20';
-        return 'bg-danger/10 text-danger border-danger/20';
-    };
-
-    // Helper UI: Hiển thị nhãn trạng thái CV
-    const getStatusBadge = (status) => {
-        if (status === 'shortlisted' || status === 'interviewed' || status === 'offered') {
-            return <span className="px-2 py-0.5 rounded-md bg-success/10 text-success text-xs font-bold border border-success/20">Đã duyệt</span>;
-        }
-        if (status === 'rejected') {
-            return <span className="px-2 py-0.5 rounded-md bg-danger/10 text-danger text-xs font-bold border border-danger/20">Đã từ chối</span>;
-        }
-        return <span className="px-2 py-0.5 rounded-md bg-surface text-text-muted text-xs font-bold border border-border">Chờ xử lý</span>;
     };
 
     return (
         <RecruiterLayout>
             <div className="mb-8">
-                <h1 className="text-2xl font-black text-text-main mb-2">Quản lý Ứng viên</h1>
-                <p className="text-text-muted font-medium">Xem xét, lọc và đánh giá hồ sơ ứng tuyển từ hệ thống AI.</p>
+                <h1 className="text-3xl font-black text-text-main">Quản lý ứng viên</h1>
+                <p className="text-text-muted mt-1 font-medium">Đánh giá và phản hồi hồ sơ ứng tuyển của bạn.</p>
             </div>
 
-            {/* Chọn Job để xem */}
-            <div className="bg-white p-6 rounded-2xl border border-border mb-6 shadow-sm">
-                <label className="block text-sm font-bold text-text-main mb-3">Chọn tin tuyển dụng để xem ứng viên:</label>
-                <div className="relative">
-                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
-                    <select
-                        value={selectedJob}
-                        onChange={(e) => setSelectedJob(e.target.value)}
-                        className="w-full sm:w-1/2 pl-12 pr-4 py-3 rounded-xl border border-border bg-surface font-semibold text-text-main focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer appearance-none"
-                    >
-                        {jobs.length === 0 ? (
-                            <option value="">Bạn chưa có tin tuyển dụng nào</option>
-                        ) : (
-                            jobs.map(job => (
-                                <option key={job._id} value={job._id}>
-                                    {job.title} ({job.applicantCount || 0} hồ sơ)
-                                </option>
-                            ))
-                        )}
-                    </select>
-                </div>
+            {/* Thanh công cụ */}
+            <div className="bg-white p-4 rounded-2xl border border-border shadow-sm flex flex-col sm:flex-row gap-4 mb-8">
+                <select
+                    value={selectedJob}
+                    onChange={(e) => setSelectedJob(e.target.value)}
+                    className="flex-1 px-4 py-3 rounded-xl border border-border bg-surface font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                    <option value="all">Tất cả tin tuyển dụng</option>
+                    {jobs.map(job => (
+                        <option key={job._id} value={job._id}>{job.title}</option>
+                    ))}
+                </select>
             </div>
-
-            {/* THANH CÔNG CỤ TÌM KIẾM & LỌC */}
-            {candidates.length > 0 && (
-                <div className="bg-white p-4 rounded-2xl border border-border mb-6 shadow-sm flex flex-col md:flex-row gap-4">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
-                        <input
-                            type="text"
-                            placeholder="Tìm tên hoặc email ứng viên..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-12 pr-4 py-2.5 rounded-xl border border-border bg-surface font-medium text-sm focus:ring-2 focus:ring-primary/20 outline-none"
-                        />
-                    </div>
-
-                    <div className="flex gap-4">
-                        <div className="relative min-w-[160px]">
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={16} />
-                            <select
-                                value={scoreFilter}
-                                onChange={(e) => setScoreFilter(e.target.value)}
-                                className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-border bg-surface font-semibold text-sm cursor-pointer outline-none appearance-none"
-                            >
-                                <option value="all">Mọi mức điểm AI</option>
-                                <option value="high">Điểm cao (≥ 80)</option>
-                                <option value="medium">Khá (50 - 79)</option>
-                                <option value="low">Chưa đạt ({"<"} 50)</option>
-                            </select>
-                        </div>
-
-                        <button
-                            onClick={() => setDateSort(prev => prev === 'desc' ? 'asc' : 'desc')}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-surface hover:bg-border/50 font-semibold text-sm transition-colors text-text-main"
-                        >
-                            {dateSort === 'desc' ? <SortDesc size={16} className="text-primary" /> : <SortAsc size={16} className="text-primary" />}
-                            {dateSort === 'desc' ? 'Mới nhất' : 'Cũ nhất'}
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Danh sách ứng viên */}
             {loading ? (
-                <div className="text-center py-20 text-text-muted font-semibold">Đang tải danh sách...</div>
-            ) : !selectedJob ? (
-                <div className="text-center py-20 text-text-muted">Vui lòng chọn một công việc để xem.</div>
-            ) : candidates.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-border p-16 text-center">
-                    <User className="w-12 h-12 text-text-muted/50 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-text-main mb-2">Chưa có ứng viên nào</h3>
-                    <p className="text-text-muted">Khi có người nộp CV, hồ sơ sẽ xuất hiện tại đây.</p>
-                </div>
-            ) : filteredAndSortedCandidates.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-border p-16 text-center">
-                    <Search className="w-12 h-12 text-text-muted/50 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-text-main mb-2">Không tìm thấy ứng viên phù hợp</h3>
-                    <p className="text-text-muted mb-4">Hãy thử thay đổi điều kiện tìm kiếm và lọc.</p>
-                    <Button variant="outline" onClick={() => { setSearchTerm(''); setScoreFilter('all'); }}>Xóa bộ lọc</Button>
+                <div className="text-center py-10 font-bold text-text-muted">Đang tải dữ liệu...</div>
+            ) : applications.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-3xl border border-border">
+                    <User size={48} className="mx-auto text-border mb-4" />
+                    <h3 className="text-xl font-bold text-text-main">Chưa có ứng viên nào</h3>
+                    <p className="text-text-muted mt-2">Hãy chờ đợi thêm hoặc chia sẻ tin tuyển dụng nhé!</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                    {filteredAndSortedCandidates.map((app) => (
-                        <div key={app._id} className="bg-white border border-border rounded-2xl p-6 shadow-sm flex flex-col hover:shadow-md transition-shadow">
+                <div className="grid gap-6">
+                    {applications.map(app => (
+                        <div key={app._id} className="bg-white p-6 rounded-3xl border border-border shadow-sm flex flex-col md:flex-row gap-6 items-start md:items-center">
 
-                            <div className="flex justify-between items-start mb-4 pb-4 border-b border-border">
-                                <div className="flex gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xl shrink-0">
-                                        {app.candidate?.name?.charAt(0) || 'U'}
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <h3 className="font-bold text-lg text-text-main leading-tight">{app.candidate?.name || 'Ứng viên ẩn danh'}</h3>
-                                            {getStatusBadge(app.status)}
+                            {/* Thông tin Ứng viên */}
+                            <div className="flex items-center gap-4 flex-1">
+                                <div className="w-14 h-14 rounded-full border border-border overflow-hidden bg-surface shrink-0">
+                                    {app.candidate?.avatar ? (
+                                        <img src={app.candidate.avatar} className="w-full h-full object-cover" alt="Avatar" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center font-bold text-primary text-xl">
+                                            {app.candidate?.name?.charAt(0)}
                                         </div>
-                                        <div className="text-sm font-medium text-text-muted">{app.candidate?.email}</div>
-                                    </div>
+                                    )}
                                 </div>
-                                <div className={`px-3 py-1.5 rounded-lg border text-sm font-black flex items-center gap-1.5 ${getScoreColor(app.aiScore)}`}>
-                                    AI Score: {app.aiScore ? `${app.aiScore}/100` : 'Đang chấm...'}
+                                <div>
+                                    <h4 className="font-bold text-lg text-text-main">{app.candidate?.name}</h4>
+                                    <div className="text-sm text-text-muted flex items-center gap-2">
+                                        <Clock size={14} /> Nộp cho vị trí: <span className="font-semibold text-primary">{app.job?.title}</span>
+                                    </div>
+
+                                    {/* Nhóm các nút thao tác nhanh dưới tên */}
+                                    <div className="flex items-center gap-4 mt-2">
+                                        <a href={app.cvUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-primary inline-flex items-center gap-1 hover:underline">
+                                            <FileText size={16} /> Xem CV PDF
+                                        </a>
+
+                                        {/* NÚT BÁO CÁO Ở ĐÂY - Trông sẽ gọn và chuyên nghiệp hơn */}
+                                        <button
+                                            onClick={() => handleReport(app._id)}
+                                            className="flex items-center gap-1 text-sm font-bold text-danger hover:text-danger/80 transition-colors"
+                                            title="Báo cáo ứng viên này với Admin"
+                                        >
+                                            <AlertTriangle size={16} /> Báo cáo CV Fake
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-3 mb-6 flex-1">
-                                <div className="flex items-center gap-3 text-sm font-medium text-text-muted">
-                                    <Calendar size={16} className="text-primary shrink-0" />
-                                    <span>Nộp ngày: {new Date(app.createdAt).toLocaleDateString('vi-VN')}</span>
+                            {/* Điểm AI */}
+                            <div className="flex flex-col items-center">
+                                <div className="text-xs font-bold text-text-muted uppercase mb-1 flex items-center gap-1">
+                                    <BrainCircuit size={14} /> Điểm AI
                                 </div>
-
-                                {app.coverLetter && (
-                                    <div className="bg-surface p-3 rounded-xl text-sm text-text-muted font-medium line-clamp-2 italic border border-border">
-                                        "{app.coverLetter}"
+                                {app.aiStatus === 'processing' || app.aiStatus === 'pending' ? (
+                                    <div className="text-sm font-bold text-text-muted italic">Đang xử lý...</div>
+                                ) : app.aiStatus === 'error' ? (
+                                    <div className="text-sm font-bold text-danger">Lỗi</div>
+                                ) : (
+                                    <div className={`text-3xl font-black ${app.aiScore >= 80 ? 'text-success' : app.aiScore >= 50 ? 'text-warning' : 'text-danger'}`}>
+                                        {app.aiScore ?? 0}<span className="text-sm text-text-muted">/100</span>
                                     </div>
                                 )}
-
-                                {app.aiSummary && (
-                                    <div className="text-sm font-medium text-text-main bg-primary/5 p-4 rounded-xl border border-primary/10">
-                                        <span className="font-bold text-primary block mb-1">💡 Phân tích từ AI:</span>
-                                        <div className="line-clamp-3 leading-relaxed">{app.aiSummary}</div>
-                                    </div>
+                                {(app.aiStatus === 'error' || (app.aiStatus === 'done' && (app.aiScore ?? 0) === 0)) && (
+                                    <button onClick={() => handleReScore(app._id)} className="text-xs font-bold text-primary mt-1 hover:underline">
+                                        Chấm lại
+                                    </button>
                                 )}
                             </div>
-
-                            <div className="flex items-center gap-3 pt-4 border-t border-border mt-auto">
-                                <a
-                                    href={app.cvUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl font-bold text-primary hover:bg-primary-light transition-colors text-sm"
+                            {/* Cập nhật trạng thái */}
+                            <div className="w-full md:w-48">
+                                <select
+                                    value={app.status}
+                                    onChange={(e) => handleStatusChange(app._id, e.target.value)}
+                                    className={`w-full px-4 py-2.5 rounded-xl border-2 font-bold outline-none transition-colors ${app.status === 'pending' ? 'border-warning/30 bg-warning/10 text-warning' :
+                                        app.status === 'accepted' ? 'border-success/30 bg-success/10 text-success' :
+                                            'border-danger/30 bg-danger/10 text-danger'
+                                        }`}
                                 >
-                                    <ExternalLink size={16} /> Xem CV
-                                </a>
-
-                                {/* ✅ FIX 3: Nút duyệt/từ chối đã được nối mạng API */}
-                                <div className="flex gap-2 shrink-0">
-                                    <button
-                                        onClick={() => handleUpdateStatus(app._id, 'shortlisted')}
-                                        className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${app.status === 'shortlisted' ? 'bg-success text-white shadow-md shadow-success/20' : 'bg-success/10 text-success hover:bg-success hover:text-white'}`}
-                                        title="Duyệt hồ sơ (Đưa vào vòng trong)"
-                                    >
-                                        <CheckCircle size={20} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleUpdateStatus(app._id, 'rejected')}
-                                        className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all ${app.status === 'rejected' ? 'bg-danger text-white shadow-md shadow-danger/20' : 'bg-danger/10 text-danger hover:bg-danger hover:text-white'}`}
-                                        title="Từ chối hồ sơ"
-                                    >
-                                        <XCircle size={20} />
-                                    </button>
-                                </div>
+                                    <option value="applied">Chờ duyệt (Applied)</option>
+                                    <option value="reviewing">Đang xem xét (Reviewing)</option>
+                                    <option value="shortlisted">Danh sách rút gọn (Shortlisted)</option>
+                                    <option value="interviewed">Phỏng vấn (Interviewed)</option>
+                                    <option value="offered">Trúng tuyển (Offered)</option>
+                                    <option value="rejected">Từ chối (Rejected)</option>
+                                </select>
                             </div>
 
                         </div>

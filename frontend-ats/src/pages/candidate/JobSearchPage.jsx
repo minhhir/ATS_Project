@@ -49,11 +49,8 @@ export function JobSearchPage() {
     };
 
     // Load lần đầu khi vào trang
-
-    useEffect(() => {
-        fetchJobs();
-
-    }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { fetchJobs(); }, []);
 
     const handleSearch = (e) => {
         e.preventDefault();

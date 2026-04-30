@@ -34,10 +34,8 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Nếu lỗi 401 (Hết hạn Token) và chưa từng thử retry
         if (error.response?.status === 401 && !originalRequest._retry) {
 
-            // Bỏ qua chặn bắt nếu API bị lỗi là login/register
             if (originalRequest.url.includes('/login') || originalRequest.url.includes('/register') || originalRequest.url.includes('/refresh')) {
                 return Promise.reject(error);
             }
@@ -71,14 +69,12 @@ api.interceptors.response.use(
                 return api(originalRequest);
 
             } catch (refreshError) {
-                // REFRESH THẤT BẠI (Token chết thật sự)
+
                 processQueue(refreshError, null);
                 window.__accessToken = null;
 
-                // ✅ DANH SÁCH VÙNG AN TOÀN (Ai vào cũng được, không bao giờ bị đá)
                 const publicPaths = ['/', '/login', '/register', '/forgot-password', '/verify-otp', '/reset-password'];
 
-                // Nếu user ĐANG KHÔNG Ở VÙNG AN TOÀN -> Đá về trang đăng nhập
                 if (!publicPaths.includes(window.location.pathname)) {
                     window.location.href = '/login';
                 }

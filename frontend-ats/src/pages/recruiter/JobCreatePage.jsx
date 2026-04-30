@@ -56,7 +56,7 @@ export function JobCreatePage() {
                     requirements: job.requirements || '',
                     skills: skillsString,
                 });
-            } catch (err) {
+            } catch {
                 setError('Không tìm thấy tin tuyển dụng này.');
                 setTimeout(() => navigate('/recruiter/jobs'), 2000);
             } finally {

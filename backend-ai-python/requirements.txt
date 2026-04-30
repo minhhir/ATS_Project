@@ -4,3 +4,8 @@ python-multipart==0.0.6
 pdfminer.six==20221105
 pydantic==2.7.0
 httpx==0.25.2
+
+# Semantic scoring (sentence-transformer multilingual VI+EN)
+sentence-transformers==2.7.0
+torch==2.2.2
+numpy==1.26.4

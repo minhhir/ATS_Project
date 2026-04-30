@@ -2,20 +2,21 @@ const axios = require('axios');
 const Application = require('../models/Application');
 
 exports.triggerAIScoring = async (applicationId, data = null) => {
-    let cvUrl, jdText;
+    let cvUrl, jdText, jdSkills;
 
     if (data) {
         // Fast path: data được truyền từ controller, không cần query DB thêm
-        ({ cvUrl, jdText } = data);
+        ({ cvUrl, jdText, jdSkills } = data);
     } else {
         // Slow path: dùng khi retrigger thủ công
-        const app = await Application.findById(applicationId).populate('job', 'requirements');
+        const app = await Application.findById(applicationId).populate('job', 'requirements skills');
         if (!app || !app.job) {
             console.error('[AI Service]: Application hoặc Job không tồn tại');
             return;
         }
         cvUrl = app.cvUrl;
         jdText = app.job.requirements;
+        jdSkills = app.job.skills;
     }
 
     // Dùng updateOne thay vì findById → save() — không cần load toàn bộ document
@@ -27,16 +28,17 @@ exports.triggerAIScoring = async (applicationId, data = null) => {
         await Application.updateOne({ _id: applicationId }, { aiStatus: 'error' });
         return;
     }
-    const safejdText = jdText || '';
+    const safeJdText = jdText || '';
+    const safeJdSkills = Array.isArray(jdSkills) ? jdSkills.filter(Boolean) : [];
 
     try {
-        const payload = { cv_url: cvUrl, jd_text: safejdText };
-        console.log('[AI Service] Payload gửi Python:', JSON.stringify(payload).slice(0, 200));
+        const payload = { cv_url: cvUrl, jd_text: safeJdText, jd_skills: safeJdSkills };
+        console.log('[AI Service] Payload gửi Python:', JSON.stringify({ ...payload, jd_text: safeJdText.slice(0, 80) }).slice(0, 280));
 
         const response = await axios.post(
             `${process.env.AI_SERVICE_URL}/score`,
             payload,
-            { timeout: 30000 }
+            { timeout: 60000 } // model embedding lần đầu có thể chạy chậm
         );
         await Application.updateOne({ _id: applicationId }, {
             aiScore: response.data.score,
@@ -54,7 +56,7 @@ exports.batchScoreByJob = async (jobId) => {
     const apps = await Application.find({
         job: jobId,
         aiStatus: { $in: ['pending', 'error'] }
-    }).populate('job', 'requirements').lean();
+    }).populate('job', 'requirements skills').lean();
 
     if (!apps.length) return 0;
 
@@ -65,7 +67,8 @@ exports.batchScoreByJob = async (jobId) => {
             chunk.map(app =>
                 exports.triggerAIScoring(app._id, {
                     cvUrl: app.cvUrl,
-                    jdText: app.job?.requirements || ''
+                    jdText: app.job?.requirements || '',
+                    jdSkills: app.job?.skills || []
                 }).catch(err => console.error(`[Batch Score] app ${app._id}:`, err.message))
             )
         );

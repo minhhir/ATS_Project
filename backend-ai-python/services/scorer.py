@@ -1,8 +1,20 @@
+"""
+Scoring CV vs JD bằng Sentence-Transformer model (đa ngôn ngữ Việt + Anh)
++ keyword overlap + skill matching làm composite score.
+
+Thiết kế:
+- Lazy-load model: chỉ load lần đầu, các request sau dùng lại.
+- Graceful fallback: nếu load model thất bại (thiếu lib / mạng / ổ đĩa),
+  vẫn chấm được bằng keyword/skill overlap để pipeline không gãy.
+"""
+
 import math
 import re
+import threading
 from collections import Counter
+from typing import Optional, List, Tuple
 
-# Stop words tiếng Anh
+# ----- Stop words -----
 STOP_WORDS_EN = {
     "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your",
     "yours", "he", "him", "his", "she", "her", "hers", "it", "its", "they",
@@ -20,7 +32,6 @@ STOP_WORDS_EN = {
     "may", "might", "must", "shall", "need", "used", "using", "use",
 }
 
-# Stop words tiếng Việt phổ biến
 STOP_WORDS_VI = {
     "và", "của", "cho", "với", "là", "được", "trong", "có", "các", "những",
     "một", "này", "đó", "khi", "từ", "để", "tại", "về", "như", "theo",
@@ -28,101 +39,193 @@ STOP_WORDS_VI = {
     "mà", "nên", "cũng", "đã", "sẽ", "đang", "rất", "hơn", "nhất",
     "nhiều", "ít", "tất", "cả", "mọi", "không", "chưa", "chỉ", "còn",
     "lại", "ra", "vào", "lên", "xuống", "qua", "lúc", "sau", "trước",
-    "trên", "dưới", "giữa", "bên", "ngoài", "trong", "cùng", "luôn",
+    "trên", "dưới", "giữa", "bên", "ngoài", "cùng", "luôn",
     "thường", "mỗi", "ai", "gì", "nào", "đâu", "sao", "thế", "vậy",
-    "ơi", "ạ", "nhé", "thôi", "rồi", "đây", "kia", "đó", "họ", "tôi",
-    "bạn", "anh", "chị", "em", "mình", "chúng", "toàn", "bộ", "một",
+    "ơi", "ạ", "nhé", "thôi", "rồi", "đây", "kia", "họ", "tôi",
+    "bạn", "anh", "chị", "em", "mình", "chúng", "toàn", "bộ",
 }
 
 STOP_WORDS = STOP_WORDS_EN | STOP_WORDS_VI
 
+# Tên model: nhỏ (~117MB) nhưng support Việt + Anh tốt
+MODEL_NAME = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+MAX_TEXT_CHARS = 5000  # cắt bớt để inference nhanh
+
+_MODEL = None
+_MODEL_TRIED = False
+_MODEL_LOCK = threading.Lock()
+
+
+def _get_model():
+    """Lazy-load model 1 lần duy nhất. None nếu load fail (fallback path)."""
+    global _MODEL, _MODEL_TRIED
+    if _MODEL_TRIED:
+        return _MODEL
+    with _MODEL_LOCK:
+        if _MODEL_TRIED:
+            return _MODEL
+        try:
+            from sentence_transformers import SentenceTransformer  # type: ignore
+            print(f'[Scorer] Loading model: {MODEL_NAME} (lần đầu có thể mất 1-2 phút)...')
+            _MODEL = SentenceTransformer(MODEL_NAME)
+            print('[Scorer] Model loaded OK.')
+        except Exception as e:
+            print(f'[Scorer] Không load được model ({e}). Fallback sang keyword scoring.')
+            _MODEL = None
+        _MODEL_TRIED = True
+        return _MODEL
+
 
 def preprocess(text: str) -> str:
-    """Chuẩn hóa văn bản: chuyển thường, loại bỏ dấu câu, giữ nguyên Unicode (tiếng Việt)."""
-    text = text.lower()
-    # Dùng \w với Unicode để giữ lại chữ cái tiếng Việt (ă, ơ, ư, v.v.)
-    # Loại bỏ dấu câu và ký tự đặc biệt, giữ lại chữ, số và khoảng trắng
+    text = (text or '').lower()
     text = re.sub(r'[^\w\s]', ' ', text)
-    # Loại bỏ dấu gạch dưới (nằm trong \w nhưng không phải từ thật)
     text = re.sub(r'_', ' ', text)
     return re.sub(r'\s+', ' ', text).strip()
 
 
-def get_term_frequencies(words: list) -> dict:
-    """Tính tần suất tương đối (TF) cho mỗi từ."""
-    if not words:
-        return {}
-    tf = Counter(words)
-    total_words = len(words)
-    return {word: count / total_words for word, count in tf.items()}
+def _tokenize(text: str) -> List[str]:
+    cleaned = preprocess(text)
+    return [w for w in cleaned.split() if w not in STOP_WORDS and len(w) > 1]
 
 
-def score_cv(cv_text: str, jd_text: str) -> dict:
-    """
-    Tính điểm phù hợp giữa CV và Job Description bằng TF-IDF cosine similarity.
-    Trả về: score (0–100), matched_keywords, summary.
-    """
-    cv_clean = preprocess(cv_text)
-    jd_clean = preprocess(jd_text)
-
-    cv_words = [w for w in cv_clean.split() if w not in STOP_WORDS and len(w) > 1]
-    jd_words = [w for w in jd_clean.split() if w not in STOP_WORDS and len(w) > 1]
-
-    if len(cv_words) < 10 or len(jd_words) < 10:
-        return {
-            'score': 0.0,
-            'matched_keywords': [],
-            'summary': 'Không đủ nội dung hợp lệ để phân tích (yêu cầu ít nhất 10 từ khóa).',
-        }
-
-    cv_tf = get_term_frequencies(cv_words)
-    jd_tf = get_term_frequencies(jd_words)
-
-    vocabulary = set(cv_tf.keys()) | set(jd_tf.keys())
-
-    # IDF với smoothing: log(N+1 / df+1) + 1, N=2 tài liệu
-    idf = {}
-    for word in vocabulary:
-        doc_count = (1 if word in cv_tf else 0) + (1 if word in jd_tf else 0)
-        idf[word] = math.log((2 + 1) / (doc_count + 1)) + 1
-
-    cv_vector = {word: cv_tf.get(word, 0.0) * idf[word] for word in vocabulary}
-    jd_vector = {word: jd_tf.get(word, 0.0) * idf[word] for word in vocabulary}
-
-    dot_product = sum(cv_vector[word] * jd_vector[word] for word in vocabulary)
-    mag_cv = math.sqrt(sum(val ** 2 for val in cv_vector.values()))
-    mag_jd = math.sqrt(sum(val ** 2 for val in jd_vector.values()))
-
-    if mag_cv == 0 or mag_jd == 0:
-        return {
-            'score': 0.0,
-            'matched_keywords': [],
-            'summary': 'Nội dung không chứa từ khóa có nghĩa.',
-        }
-
-    similarity = dot_product / (mag_cv * mag_jd)
-    score = min(round(similarity * 100, 1), 100.0)
-
-    # Lấy tối đa 15 từ khóa quan trọng nhất của JD có xuất hiện trong CV
-    # Sắp xếp theo TF trong JD (độ quan trọng trong JD), lọc ra những từ có trong CV
-    # Ngưỡng tối thiểu: từ phải xuất hiện ít nhất 1 lần trong JD (relative freq >= 1/len)
-    min_jd_freq = 1 / max(len(jd_words), 1)
-    matched = [
-        word
-        for word, freq in sorted(jd_tf.items(), key=lambda x: x[1], reverse=True)
-        if word in cv_tf and freq >= min_jd_freq
-    ][:15]
-
-    if matched:
-        summary = (
-            f"Điểm phù hợp: {score}/100. "
-            f"Tìm thấy {len(matched)} từ khóa khớp: {', '.join(matched)}."
+def _semantic_similarity(cv_text: str, jd_text: str) -> Optional[float]:
+    """Cosine similarity giữa embedding CV và JD. None nếu model unavailable."""
+    model = _get_model()
+    if model is None:
+        return None
+    try:
+        embs = model.encode(
+            [cv_text[:MAX_TEXT_CHARS], jd_text[:MAX_TEXT_CHARS]],
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            show_progress_bar=False,
         )
+        sim = float((embs[0] * embs[1]).sum())
+        # cosine có thể âm — clamp về [0,1]
+        return max(0.0, min(1.0, sim))
+    except Exception as e:
+        print(f'[Scorer] Lỗi khi encode embedding: {e}')
+        return None
+
+
+def _keyword_overlap(cv_words: List[str], jd_words: List[str]) -> Tuple[float, List[str]]:
+    """Trả về (coverage 0..1, danh sách từ khóa quan trọng đã khớp)."""
+    if not jd_words:
+        return 0.0, []
+    cv_set = set(cv_words)
+    jd_counter = Counter(jd_words)
+    matched = [w for w, _freq in jd_counter.most_common() if w in cv_set]
+    coverage = len(matched) / len(jd_counter)
+    return coverage, matched
+
+
+def _skill_match(cv_text_lower: str, jd_skills: Optional[List[str]]) -> Tuple[Optional[float], List[str]]:
+    """Match từng skill yêu cầu. Hỗ trợ cả skill nhiều từ (vd 'machine learning')."""
+    if not jd_skills:
+        return None, []
+    matched = []
+    for raw in jd_skills:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip().lower()
+        if not s:
+            continue
+        # Match nguyên cụm
+        if re.search(r'\b' + re.escape(s) + r'\b', cv_text_lower):
+            matched.append(raw)
+            continue
+        # Match dạng tách từ (cho cụm nhiều từ): tất cả token phải xuất hiện
+        tokens = [t for t in re.split(r'\s+', s) if t]
+        if len(tokens) > 1 and all(re.search(r'\b' + re.escape(t) + r'\b', cv_text_lower) for t in tokens):
+            matched.append(raw)
+    if not jd_skills:
+        return None, []
+    return len(matched) / max(1, len(jd_skills)), matched
+
+
+def _build_summary(score_pct: float, sem: Optional[float], matched_skills: List[str],
+                   missing_skills: List[str], matched_kw: List[str]) -> str:
+    parts = [f"Điểm phù hợp: {score_pct}/100."]
+
+    if score_pct >= 80:
+        parts.append("Hồ sơ rất phù hợp với yêu cầu.")
+    elif score_pct >= 60:
+        parts.append("Hồ sơ khá phù hợp, đáng để phỏng vấn.")
+    elif score_pct >= 40:
+        parts.append("Mức độ phù hợp trung bình, cần xem xét thêm.")
     else:
-        summary = f"Điểm phù hợp: {score}/100. Không tìm thấy từ khóa chung đáng kể."
+        parts.append("Mức độ phù hợp thấp với yêu cầu.")
+
+    if sem is not None:
+        parts.append(f"Tương đồng ngữ nghĩa: {round(sem * 100, 1)}%.")
+
+    if matched_skills:
+        parts.append(f"Khớp {len(matched_skills)} kỹ năng: {', '.join(matched_skills[:6])}.")
+    if missing_skills:
+        parts.append(f"Còn thiếu kỹ năng: {', '.join(missing_skills[:5])}.")
+    if matched_kw and not matched_skills:
+        parts.append(f"Từ khóa khớp: {', '.join(matched_kw[:8])}.")
+
+    return ' '.join(parts)
+
+
+def score_cv(cv_text: str, jd_text: str, jd_skills: Optional[List[str]] = None) -> dict:
+    """Chấm điểm CV vs JD bằng composite: semantic + keyword + skill."""
+    if not cv_text or not jd_text:
+        return {'score': 0.0, 'matched_keywords': [], 'summary': 'CV hoặc JD không có nội dung.'}
+
+    cv_words = _tokenize(cv_text)
+    jd_words = _tokenize(jd_text)
+
+    if len(cv_words) < 10 or len(jd_words) < 5:
+        return {
+            'score': 0.0,
+            'matched_keywords': [],
+            'summary': 'Không đủ nội dung hợp lệ để phân tích (CV cần ít nhất 10 từ khóa).',
+        }
+
+    # 1. Semantic similarity (None nếu model fail)
+    sem = _semantic_similarity(cv_text, jd_text)
+
+    # 2. Keyword coverage
+    kw_cov, matched_kw = _keyword_overlap(cv_words, jd_words)
+
+    # 3. Skill match (None nếu không có skills nào)
+    cv_lower = cv_text.lower()
+    skill_cov, matched_skills = _skill_match(cv_lower, jd_skills)
+    missing_skills = [s for s in (jd_skills or []) if s not in matched_skills]
+
+    # Composite: ưu tiên semantic > skill > keyword
+    if sem is not None and skill_cov is not None:
+        # Có cả 3 tín hiệu
+        composite = 0.55 * sem + 0.25 * skill_cov + 0.20 * kw_cov
+    elif sem is not None:
+        composite = 0.65 * sem + 0.35 * kw_cov
+    elif skill_cov is not None:
+        # Fallback: không có embedding
+        composite = 0.55 * skill_cov + 0.45 * kw_cov
+    else:
+        composite = kw_cov
+
+    # Hiệu chỉnh: cosine similarity của model multilingual hiếm khi vượt 0.85
+    # với CV/JD thật, nên stretch nhẹ để CV "rất phù hợp" về vùng 80+
+    score = min(1.0, composite * 1.1) if sem is not None else composite
+    score_pct = round(score * 100, 1)
+
+    summary = _build_summary(score_pct, sem, matched_skills, missing_skills, matched_kw)
+
+    # Gộp matched: kỹ năng trước, sau đó từ khóa nội dung, dedupe
+    combined = []
+    seen = set()
+    for item in matched_skills + matched_kw:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(item)
 
     return {
-        'score': score,
-        'matched_keywords': matched,
+        'score': score_pct,
+        'matched_keywords': combined[:15],
         'summary': summary,
     }

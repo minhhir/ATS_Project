@@ -29,21 +29,22 @@ const uploadToCloudinary = (fileBuffer, originalName, isImage = false) => {
                 : 'file';
             const publicId = `${Date.now()}_${safeName}`;
 
-            // Phân luồng: Nếu là ảnh thì lưu thư mục avatar, nếu là CV thì lưu raw pdf
+            // ✅ CẤU HÌNH ĐÃ ĐƯỢC CHUẨN HÓA LẠI
             const options = isImage ? {
                 folder: "mini_ats_avatars",
                 resource_type: "image",
                 public_id: publicId
             } : {
                 folder: "mini_ats_cvs",
-                resource_type: "raw",
-                format: "pdf",
-                access_mode: "public",
-                public_id: publicId
+                resource_type: "auto", // Dùng auto để Cloudinary tự nhận diện PDF
+                public_id: publicId + ".pdf" // Nối sẵn đuôi pdf để trình duyệt không bị lỗi khi tải về
             };
 
             let stream = cloudinary.uploader.upload_stream(options, (error, result) => {
-                if (error) return reject(new AppError('Lỗi tải file lên mây', 500));
+                if (error) {
+                    console.error('Cloudinary Error:', error);
+                    return reject(new AppError('Lỗi tải file lên mây', 500));
+                }
                 resolve(result);
             });
 
@@ -54,5 +55,4 @@ const uploadToCloudinary = (fileBuffer, originalName, isImage = false) => {
         }
     });
 };
-
 module.exports = { upload, uploadToCloudinary };

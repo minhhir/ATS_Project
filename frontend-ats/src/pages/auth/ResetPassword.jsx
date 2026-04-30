@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
 import { AuthLayout } from '@/layout/AuthLayout';

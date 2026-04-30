@@ -15,16 +15,20 @@ export function NotificationBell() {
             const { data } = await api.get('/notifications');
             setNotifications(data.data);
             setUnreadCount(data.data.filter(n => !n.isRead).length);
-        } catch (error) {
+        } catch {
             console.error('Lỗi lấy thông báo');
         }
     };
 
     useEffect(() => {
-        fetchNotifications();
         // ✅ Fix 2: Tăng polling lên 30s để giảm tải server
         const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
+        // Chạy lần đầu ngoài luồng mount để tránh setState trực tiếp trong effect
+        const initial = setTimeout(fetchNotifications, 0);
+        return () => {
+            clearInterval(interval);
+            clearTimeout(initial);
+        };
     }, []);
 
     // ✅ Fix 1: Xử lý Click Outside để đóng Dropdown
@@ -62,7 +66,9 @@ export function NotificationBell() {
             await api.put('/notifications/read-all');
             setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
             setUnreadCount(0);
-        } catch (error) { }
+        } catch {
+            // ignore: giữ nguyên UI nếu request lỗi
+        }
     };
 
     return (

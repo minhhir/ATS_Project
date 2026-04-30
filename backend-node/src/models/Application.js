@@ -20,12 +20,15 @@ const applicationSchema = new mongoose.Schema({
         enum: ['applied', 'reviewing', 'shortlisted', 'interviewed', 'offered', 'rejected'],
         default: 'applied'
     },
-
-    isFeatured: { type: Boolean, default: false },
+    report: {
+        isReported: { type: Boolean, default: false },
+        reason: String,
+        reportedAt: Date
+    },
 
     // FIXED: Thêm maxlength: 1000 cho recruiterNote
     recruiterNote: { type: String, maxlength: 1000 },
-
+    isFeatured: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // Đảm bảo 1 ứng viên chỉ được nộp 1 lần cho 1 công việc

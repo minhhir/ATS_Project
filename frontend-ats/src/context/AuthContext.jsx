@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import api from '@/api/axios';
 
 const AuthContext = createContext(null);
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
     const ctx = useContext(AuthContext);
     if (!ctx) throw new Error('useAuth phải dùng bên trong AuthProvider');
@@ -46,10 +47,18 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const logout = useCallback(async () => {
-        try { await api.post('/auth/logout'); } catch { }
+        try {
+            await api.post('/auth/logout');
+        } catch {
+            // ignore: server unreachable vẫn cần clear state phía client
+        }
         window.__accessToken = null;
         setUser(null);
         window.location.href = '/';
+    }, []);
+
+    const updateUser = useCallback((data) => {
+        setUser(prev => ({ ...prev, ...data }));
     }, []);
 
     return (
@@ -59,6 +68,7 @@ export const AuthProvider = ({ children }) => {
             login,
             register,
             logout,
+            updateUser,
             isAuthenticated: !!user,
         }}>
             {children}
