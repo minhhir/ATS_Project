@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(node -e \"require\\('./src/controllers/authController'\\); require\\('./src/controllers/applicationController'\\); require\\('./src/controllers/notificationController'\\); require\\('./src/controllers/adminController'\\); require\\('./src/controllers/jobController'\\); require\\('./src/routes/authRoutes'\\); require\\('./src/routes/applicationRoutes'\\); require\\('./src/routes/notificationRoutes'\\); require\\('./src/routes/adminRoutes'\\); require\\('./src/routes/jobRoutes'\\); require\\('./src/services/aiService'\\); require\\('./src/services/authService'\\); console.log\\('All modules load OK'\\);\")"
-    ]
-  }
-}
