@@ -481,9 +481,7 @@ ATS_Project/
 
 ## Tác giả
 
-**Hoàng Năng Minh** — Mã sinh viên 11236154
-Đại học Kinh tế Quốc dân (NEU)
-Đề tài: Xây dựng hệ thống ATS tích hợp AI chấm điểm CV tự động
+**Hoàng Năng Minh** Xây dựng hệ thống ATS tích hợp AI chấm điểm CV tự động
 
 ---
 
