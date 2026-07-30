@@ -10,14 +10,15 @@ import { Eye, EyeOff } from 'lucide-react';
  * @param {React.ReactNode} props.rightIcon 
  * @param {string} props.error 
  */
+// Vấn đề: Mỗi form đều phải tự xử lý label/error/show password riêng, rất lặp; React Hook Form cần forwardRef để register hoạt động.
+// Giải pháp: Component bọc input có sẵn label/error/eye-toggle, dùng forwardRef để hook form gắn ref vào input gốc.
 export const Input = forwardRef(({ label, labelRight, rightIcon, error, className, type = 'text', ...props }, ref) => {
-    // State quản lý ẩn/hiện mật khẩu nằm gọn ngay trong Input
     const [showPassword, setShowPassword] = useState(false);
 
-    // Kiểm tra xem người dùng có đang muốn render ô nhập mật khẩu không
     const isPasswordType = type === 'password';
 
-    // Tự động chuyển đổi type giữa 'text' và 'password'
+    // Vấn đề: Khi user toggle "hiện mật khẩu", phải đổi type input giữa text↔password mà không reset value.
+    // Giải pháp: Tính inputType theo state showPassword, browser tự giữ value vì cùng 1 element.
     const inputType = isPasswordType ? (showPassword ? 'text' : 'password') : type;
 
     return (

@@ -6,9 +6,13 @@ from pydantic import BaseModel
 from services.extractor import extract_text_from_url
 from services.scorer import score_cv
 
+# Vấn đề: Quá nhiều request scoring chạy song song sẽ ngốn RAM/CPU và làm sập service.
+# Giải pháp: Dùng asyncio.Semaphore giới hạn số tác vụ chạy đồng thời ở MAX_CONCURRENT_TASKS.
 MAX_CONCURRENT_TASKS = 5
 semaphore = None
 
+# Vấn đề: Semaphore phải được khởi tạo trong event loop hiện tại, không thể tạo ở module-level.
+# Giải pháp: Dùng FastAPI lifespan để init semaphore khi app start và cleanup khi shutdown.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global semaphore
@@ -18,13 +22,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title='Mini ATS AI Service', version='1.0', lifespan=lifespan)
 
+# Vấn đề: Frontend (5173) và backend Node (5000) chạy ở origin khác nên trình duyệt sẽ chặn request.
+# Giải pháp: Bật CORS cho phép đúng 2 origin tin cậy thay vì mở rộng "*".
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5000"], 
+    allow_origins=["http://localhost:5173", "http://localhost:5000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-) 
+)
 
 class ScoreRequest(BaseModel):
     cv_url: str
@@ -37,11 +43,15 @@ class ScoreResponse(BaseModel):
     summary: str
 
 
+# Vấn đề: Cần endpoint nhẹ để load balancer / monitor biết service còn sống.
+# Giải pháp: Trả về JSON cố định, không phụ thuộc DB hay model để luôn trả lời nhanh.
 @app.get('/health')
 def health_check():
     return {'status': 'ok', 'service': 'ai-python'}
 
 
+# Vấn đề: Scoring vừa tải file (I/O) vừa chạy embedding (CPU nặng), nếu xử lý sai sẽ block event loop và crash service.
+# Giải pháp: Bọc bằng semaphore, tách I/O async + CPU sang thread pool, và map các loại lỗi về HTTPException tương ứng.
 @app.post('/score', response_model=ScoreResponse)
 async def score_application(req: ScoreRequest):
     # Dùng Semaphore bọc luồng nặng
@@ -50,6 +60,8 @@ async def score_application(req: ScoreRequest):
             # I/O-bound: tải PDF từ Cloudinary
             cv_text = await extract_text_from_url(req.cv_url)
 
+            # Vấn đề: PDF scan ảnh (không có text layer) sẽ trả về chuỗi rỗng → score sẽ vô nghĩa.
+            # Giải pháp: Reject sớm với 422 để client biết cần upload PDF có text thật.
             if not cv_text or len(cv_text) < 50:
                 raise HTTPException(
                     status_code=422,

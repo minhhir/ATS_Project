@@ -2,6 +2,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
+// Vấn đề: Khi reload, AuthContext vẫn đang refresh session - render Navigate trong lúc đó sẽ kick user đang login về /login; user sai role có thể tự gõ URL admin để truy cập trang admin.
+// Giải pháp: Show loader trong khi loading, redirect về /login nếu user null (kèm state.from để login xong quay lại đúng trang), redirect về / nếu role không khớp allowedRoles.
 export function ProtectedRoute({ children, allowedRoles }) {
     const { user, loading } = useAuth();
     const location = useLocation();
@@ -18,7 +20,7 @@ export function ProtectedRoute({ children, allowedRoles }) {
     if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
 
     if (allowedRoles && !allowedRoles.includes(user.role)) {
-        return <Navigate to="/" replace />; // Hoặc trang 403 Forbidden
+        return <Navigate to="/" replace />;
     }
 
     return children;

@@ -3,7 +3,8 @@ const Job = require('../models/Job');
 const Application = require('../models/Application');
 const Notification = require('../models/Notification');
 
-// 1. Lấy dữ liệu tổng quan cho Dashboard
+// Vấn đề: Admin dashboard cần 5 con số khác nhau, gọi tuần tự sẽ chậm; tổng count + danh sách user mới nhất là dữ liệu độc lập.
+// Giải pháp: Promise.all chạy song song, đồng thời loại role admin khỏi recentUsers để bảng không tự liệt kê chính admin.
 exports.getDashboardData = async (req, res, next) => {
     try {
         const [totalCandidates, totalRecruiters, totalJobs, totalApplications, recentUsers] = await Promise.all([
@@ -27,7 +28,8 @@ exports.getDashboardData = async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// 2. Lấy danh sách ALL Users
+// Vấn đề: Lộ password hash khi list user là rủi ro nghiêm trọng; admin tự liệt kê admin khác sẽ tạo bề mặt tấn công nội bộ.
+// Giải pháp: Loại role 'admin' khỏi list và select('-password') để bảo đảm không bao giờ trả password.
 exports.getAllUsers = async (req, res, next) => {
     try {
         const users = await User.find({ role: { $ne: 'admin' } }).select('-password').sort({ createdAt: -1 });
@@ -35,7 +37,8 @@ exports.getAllUsers = async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// 3. Lấy danh sách ALL Jobs
+// Vấn đề: Admin cần xem job kèm thông tin recruiter để duyệt/từ chối; nếu chỉ trả recruiter id thì FE phải gọi thêm endpoint.
+// Giải pháp: Populate name/email/companyName để bảng admin có đủ thông tin trong 1 lần fetch.
 exports.getAllJobs = async (req, res, next) => {
     try {
         const jobs = await Job.find().populate('recruiter', 'name email companyName').sort({ createdAt: -1 });
@@ -43,7 +46,8 @@ exports.getAllJobs = async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// 4. Xóa vĩnh viễn người dùng (Kèm theo data rác)
+// Vấn đề: Admin có thể vô tình tự xoá tài khoản chính mình → mất quyền truy cập hệ thống; khi xoá user, các job/application của họ sẽ thành "mồ côi".
+// Giải pháp: Block self-delete; sau khi xoá user thì cascade xoá data phụ thuộc theo role để giữ DB sạch.
 exports.deleteUser = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -65,7 +69,8 @@ exports.deleteUser = async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// 5. Lấy danh sách các đơn ứng tuyển bị BÁO CÁO FAKE
+// Vấn đề: Admin cần ưu tiên xử lý báo cáo mới nhất, kèm thông tin candidate + job để quyết định xử lý.
+// Giải pháp: Filter report.isReported=true, sort theo report.reportedAt desc, populate đủ data cần thiết.
 exports.getReportedApplications = async (req, res, next) => {
     try {
         const reports = await Application.find({ "report.isReported": true })
@@ -87,7 +92,8 @@ exports.getApplicationDetail = async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// 7. Phê duyệt hoặc từ chối tin tuyển dụng
+// Vấn đề: Tin do HR đăng phải qua kiểm duyệt trước khi public để chống spam/scam; HR không được tự duyệt tin của mình.
+// Giải pháp: Endpoint riêng cho admin set isApproved, route đã chặn role !== admin nên ở đây chỉ update field.
 exports.approveJob = async (req, res, next) => {
     try {
         const { id } = req.params;
@@ -98,13 +104,13 @@ exports.approveJob = async (req, res, next) => {
         res.json({ success: true, message: `Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} tin tuyển dụng!` });
     } catch (error) { next(error); }
 };
-// 8. Xóa đơn ứng tuyển vi phạm (Dành cho chức năng Thẩm định)
+// Vấn đề: Admin cần thẩm định 1 user kèm lịch sử hoạt động của họ (job đã đăng / application đã nộp); 2 collection khác nhau theo role.
+// Giải pháp: Branch theo role để query đúng collection và populate job title cho candidate.
 exports.getUserDetail = async (req, res, next) => {
     try {
         const user = await User.findById(req.params.id).select('-password');
         if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
 
-        // Lấy thêm lịch sử hoạt động tùy theo vai trò
         const activities = user.role === 'recruiter'
             ? await Job.find({ recruiter: user._id })
             : await Application.find({ candidate: user._id }).populate('job', 'title');
@@ -114,22 +120,18 @@ exports.getUserDetail = async (req, res, next) => {
         next(error);
     }
 };
-// 9. Xóa đơn ứng tuyển vi phạm (Dành cho chức năng Thẩm định)
-// 9. Xóa đơn ứng tuyển vi phạm & Bắn cảnh báo cho Ứng viên
+// Vấn đề: Khi admin xóa đơn vi phạm, ứng viên bị xóa "im lặng" sẽ không hiểu lý do và lặp lại hành vi; sau khi xóa thì không còn cách nào lấy lại job title.
+// Giải pháp: Notify ứng viên TRƯỚC khi xóa (vì sau xóa mất context), populate job để có title cho message.
 exports.deleteApplication = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        // 1. Tìm đơn ứng tuyển trước (để lấy thông tin gửi mail/thông báo)
-        // Dùng populate để lấy được Tên công việc (title)
         const application = await Application.findById(id).populate('job', 'title');
 
         if (!application) {
             return res.status(404).json({ message: 'Không tìm thấy đơn ứng tuyển để xóa' });
         }
 
-        // 2. TẠO THÔNG BÁO CHO ỨNG VIÊN TRƯỚC KHI XÓA
-        // Cảnh báo họ rằng hồ sơ của họ có vấn đề
         await Notification.create({
             recipient: application.candidate,
             title: '⚠️ CẢNH BÁO: Hồ sơ vi phạm bị gỡ bỏ',
@@ -149,7 +151,8 @@ exports.deleteApplication = async (req, res, next) => {
     }
 };
 
-// 11. Thống kê phân tích nâng cao cho Dashboard Admin (charts + tăng/giảm)
+// Vấn đề: Admin cần dashboard tổng quan với nhiều biểu đồ (trend 30 ngày, growth, status, top recruiter); nếu mỗi widget gọi 1 endpoint sẽ lâu và phá rate-limit.
+// Giải pháp: 1 endpoint trả tất cả dữ liệu, dùng aggregate $bucket/$dateToString/$lookup để DB tính giúp, fillSeries lấp ngày trống cho chart liền mạch.
 exports.getAnalytics = async (req, res, next) => {
     try {
         const now = new Date();
@@ -186,7 +189,8 @@ exports.getAnalytics = async (req, res, next) => {
             ])
         ]);
 
-        // Lấp đầy các ngày trống để biểu đồ không gãy
+        // Vấn đề: aggregate chỉ trả các ngày có data → biểu đồ bị "đứt đoạn" tại ngày 0 record.
+        // Giải pháp: Build map từ kết quả rồi lặp 30 ngày, ngày nào không có thì fill count: 0.
         const fillSeries = (rows) => {
             const map = new Map(rows.map(r => [r._id, r.count]));
             const out = [];
@@ -279,24 +283,22 @@ exports.getAnalytics = async (req, res, next) => {
     } catch (error) { next(error); }
 };
 
-// 10. Xóa tin tuyển dụng vi phạm và gửi cảnh báo cho cả HR lẫn Ứng viên
+// Vấn đề: Xoá tin vi phạm đơn thuần sẽ làm mất dấu vết cho cả HR và ứng viên đã apply; insert từng notification trong loop sẽ chậm khi có nhiều ứng viên.
+// Giải pháp: Lấy tất cả candidate đã apply, dùng insertMany để bắn batch, đồng thời gửi 1 notification riêng cho HR; sau đó mới xoá Application + Job để giữ ngữ cảnh khi build message.
 exports.deleteJob = async (req, res, next) => {
     try {
         const { id } = req.params;
 
-        // 1. Tìm tin tuyển dụng trước để lấy thông tin
         const job = await Job.findById(id);
         if (!job) {
             return res.status(404).json({ message: 'Không tìm thấy tin tuyển dụng để xóa' });
         }
 
-        // 2. TÌM TẤT CẢ ĐƠN ỨNG TUYỂN ĐÃ NỘP VÀO TIN NÀY
-        // Chỉ lấy trường 'candidate' để cho nhẹ dữ liệu
+        // Vấn đề: Lấy full document Application sẽ kéo cả CV/coverLetter không cần dùng.
+        // Giải pháp: select('candidate') để chỉ lấy field cần cho việc gửi notify.
         const applications = await Application.find({ job: id }).select('candidate');
 
-        // 3. CHUẨN BỊ THÔNG BÁO CHO ỨNG VIÊN
         if (applications.length > 0) {
-            // Tạo một mảng chứa thông báo cho từng người
             const candidateNotis = applications.map(app => ({
                 recipient: app.candidate,
                 title: '🛡️ Thông báo an toàn: Việc làm đã bị gỡ',
@@ -304,14 +306,14 @@ exports.deleteJob = async (req, res, next) => {
                 link: '/candidate/applications'
             }));
 
-            // Bắn một loạt thông báo vào Database cực kỳ nhanh
+            // Vấn đề: Loop create() từng record sẽ tốn N round-trip tới Mongo.
+            // Giải pháp: insertMany một phát ghi tất cả vào DB.
             await Notification.insertMany(candidateNotis);
         }
 
-        // 4. BẮN CẢNH BÁO CHO NHÀ TUYỂN DỤNG (HR)
         await Notification.create({
             recipient: job.recruiter,
-            title: '⚠️ CẢNH BÁO: Tin tuyển dụng bị gỡ bỏ',
+            title: 'CẢNH BÁO: Tin tuyển dụng bị gỡ bỏ',
             message: `Tin tuyển dụng "${job.title}" của công ty bạn đã bị Ban quản trị xóa bỏ do vi phạm quy định nền tảng.`,
             link: '/recruiter/jobs'
         });

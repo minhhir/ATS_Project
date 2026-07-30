@@ -23,6 +23,8 @@ export function ApplicationsPage() {
         fetchMyApps();
     }, []);
 
+    // Vấn đề: Status từ BE là enum tiếng Anh, hiển thị thẳng cho candidate sẽ khó hiểu; mỗi status cần màu riêng để user nhận diện trạng thái nhanh.
+    // Giải pháp: Map config (label tiếng Việt + Tailwind class) theo status, fallback về 'applied' nếu BE thêm status mới mà FE chưa update.
     const getStatusConfig = (status) => {
         const configs = {
             applied: { label: 'Mới nộp', style: 'bg-surface text-text-muted border-border' },

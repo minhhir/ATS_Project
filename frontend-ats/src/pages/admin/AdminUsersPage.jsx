@@ -22,6 +22,8 @@ export function AdminUsersPage() {
         fetchUsers();
     }, []);
 
+    // Vấn đề: Xóa user là không thể khôi phục, kèm cascade xóa job/application; nếu chỉ xóa ở client mà API fail sẽ làm UI lệch DB.
+    // Giải pháp: Confirm trước, optimistic remove khỏi state sau khi API success; nếu API throw thì alert giữ nguyên list.
     const handleDeleteUser = async (id) => {
         if (!window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn người dùng này? Toàn bộ dữ liệu của họ sẽ bị mất!')) return;
         try {

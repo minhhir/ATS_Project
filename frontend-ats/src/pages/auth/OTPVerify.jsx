@@ -8,7 +8,8 @@ import { ArrowLeft, Mail, AlertCircle } from 'lucide-react';
 export function OTPVerify() {
     const navigate = useNavigate();
     const location = useLocation();
-    // Bảo vệ an toàn: Kiểm tra kỹ location.state trước khi lấy email
+    // Vấn đề: User truy cập trực tiếp /verify-otp không qua /forgot-password sẽ làm location.state=null gây crash.
+    // Giải pháp: Optional chaining + fallback string để không throw khi state thiếu.
     const email = (location.state && location.state.email) ? location.state.email : 'email@cuaban.com';
 
     const [digits, setDigits] = useState(Array(6).fill(''));
@@ -17,16 +18,20 @@ export function OTPVerify() {
     const [resendCd, setResendCd] = useState(60);
     const inputRefs = useRef([]);
 
-    // Countdown gửi lại mã
+    // Vấn đề: Cần đếm ngược 60s trước khi cho gửi lại OTP để tránh spam email; setInterval khó cleanup chính xác khi state đổi nhanh.
+    // Giải pháp: setTimeout decrement mỗi giây và clearTimeout khi unmount/re-render — đơn giản và idempotent.
     useEffect(() => {
         if (resendCd > 0) {
             const timer = setTimeout(() => setResendCd(c => c - 1), 1000);
             return () => clearTimeout(timer);
         }
     }, [resendCd]);
-    const isSubmitting = useRef(false); // Ngăn submit nhiều lần
+    // Vấn đề: Auto-submit khi điền đủ 6 số có thể bị trigger 2 lần do React batch state, gây gọi /verify-otp đôi.
+    // Giải pháp: Cờ ref isSubmitting tracking ngoài render cycle, chỉ reset khi promise xong.
+    const isSubmitting = useRef(false);
 
-    // Hàm verify bọc trong useCallback để tránh stale closure
+    // Vấn đề: handleVerify dùng digits/email từ closure, nếu pass thẳng vào useEffect có thể bị stale (digits cũ).
+    // Giải pháp: Bọc useCallback với deps [digits, email, navigate] để mỗi lần digits đổi, callback mới có data đúng.
     const handleVerify = useCallback(async (e) => {
         if (e) e.preventDefault();
         const otp = digits.join('');
@@ -55,8 +60,9 @@ export function OTPVerify() {
         }
     }, [digits, handleVerify]);
 
+    // Vấn đề: User thường paste cả OTP từ email vào ô đầu tiên; nếu chỉ xử lý từng ký tự sẽ chỉ ghi 1 số đầu, mất phần còn lại.
+    // Giải pháp: Detect val.length > 1 nghĩa là paste, chia chars vào nhiều ô liên tiếp, focus ô tiếp theo sau khi paste xong.
     const handleChange = (idx, val) => {
-        // Xử lý Paste
         if (val.length > 1) {
             const chars = val.replace(/\D/g, '').slice(0, 6).split('');
             const next = [...digits];
@@ -67,7 +73,8 @@ export function OTPVerify() {
             return;
         }
 
-        // Xử lý nhập từng số
+        // Vấn đề: User có thể gõ chữ vào ô số làm OTP sai format trước khi submit.
+        // Giải pháp: Regex /^\d*$/ chặn ngay tại keystroke, val rỗng vẫn cho qua để hỗ trợ Backspace.
         if (!/^\d*$/.test(val)) return;
         const next = [...digits];
         next[idx] = val;
@@ -77,6 +84,8 @@ export function OTPVerify() {
         }
     };
 
+    // Vấn đề: Khi ô đang trống và user nhấn Backspace, browser không tự nhảy về ô trước khiến UX kẹt.
+    // Giải pháp: Listen keydown, nếu Backspace + ô đang rỗng thì focus về ô liền trước để xoá tiếp.
     const handleKeyDown = (idx, e) => {
         if (e.key === 'Backspace' && !digits[idx] && idx > 0 && inputRefs.current[idx - 1]) {
             inputRefs.current[idx - 1].focus();

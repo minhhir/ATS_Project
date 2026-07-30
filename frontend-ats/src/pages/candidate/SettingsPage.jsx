@@ -28,13 +28,14 @@ export function SettingsPage() {
     const avatarInputRef = useRef(null);
     const cvInputRef = useRef(null);
 
-    // Load dữ liệu khi vào trang
+    // Vấn đề: User có thể null khi mount lần đầu (đang load auth), gán thẳng user.skills sẽ crash; skills schema là array nhưng input UI là chuỗi.
+    // Giải pháp: Optional chaining + fallback ''; join skills thành CSV để hiển thị, sẽ split lại khi submit.
     useEffect(() => {
         if (user) {
             setForm({
                 name: user.name || '',
                 phone: user.phone || '',
-                skills: user.skills?.join(', ') || '' // Mảng thành chuỗi cách bằng dấu phẩy
+                skills: user.skills?.join(', ') || ''
             });
             setAvatarPreview(user.avatar || null);
             setCurrentCv(user.cvUrl || null);

@@ -4,6 +4,8 @@ import { LayoutDashboard, Briefcase, Users, Settings, LogOut, Menu, X, Bell } fr
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/ui/Logo';
 
+// Vấn đề: Recruiter có 4 trang chính (dashboard/jobs/candidates/settings), copy sidebar mỗi trang sẽ vỡ tính nhất quán; cần phân biệt rõ active link để HR biết đang ở đâu.
+// Giải pháp: Layout chia sidebar + main; dùng location.pathname.includes để highlight đúng menu, tách sidebar mobile bằng overlay drawer.
 export function RecruiterLayout({ children }) {
     const { user, logout } = useAuth();
     const location = useLocation();

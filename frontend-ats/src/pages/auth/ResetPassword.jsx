@@ -16,7 +16,8 @@ export function ResetPassword() {
     const [error, setError] = useState('');
     const [isSuccess, setIsSuccess] = useState(false);
 
-    // Nếu user truy cập trái phép mà không có email/otp từ bước trước
+    // Vấn đề: Reset password phải đi tuần tự forgot → verify-otp → reset; user vào thẳng /reset-password sẽ bị gửi request thiếu OTP.
+    // Giải pháp: Check state có email + otp không, thiếu thì hiển thị màn hình "phiên không hợp lệ" thay vì cho submit.
     if (!email || !otp) {
         return (
             <AuthLayout>

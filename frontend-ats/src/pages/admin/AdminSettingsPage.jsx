@@ -2,6 +2,8 @@ import { AdminLayout } from '@/layout/AdminLayout';
 import { ChangePasswordForm } from '@/components/shared/ChangePasswordForm';
 import { ShieldAlert } from 'lucide-react';
 
+// Vấn đề: Admin không có hồ sơ công ty hay CV để chỉnh, chỉ cần đổi password; nhưng cần nhắc admin về đặc quyền cao trước khi cho thao tác.
+// Giải pháp: Page tối giản chỉ chứa banner cảnh báo + ChangePasswordForm dùng chung, không lặp lại UI giống candidate/HR.
 export function AdminSettingsPage() {
     return (
         <AdminLayout>

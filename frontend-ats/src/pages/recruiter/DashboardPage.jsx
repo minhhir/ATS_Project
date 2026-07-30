@@ -23,6 +23,8 @@ export function DashboardPage() {
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    // Vấn đề: Dashboard cần 2 nhóm dữ liệu (summary KPI + analytics chart) từ 2 endpoint khác nhau, gọi tuần tự sẽ gấp đôi thời gian load.
+    // Giải pháp: Promise.all gửi song song; lỗi 1 endpoint không kill render, fallback hiển thị 0.
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
@@ -64,6 +66,8 @@ export function DashboardPage() {
         { label: 'Đậu (offer)', value: analytics.funnel.offered, color: '#10b981' }
     ] : [];
 
+    // Vấn đề: Bucket điểm AI của BE không kèm màu, FE phải tự gán; nếu màu cùng tone sẽ khó phân biệt mức độ phù hợp ở cùng 1 bar chart.
+    // Giải pháp: Map color theo range — xanh lá cho 80-100 (xuất sắc), cyan 60-80 (tốt), vàng 40-60 (trung bình), đỏ <40 (yếu).
     const aiBars = analytics ? analytics.aiScoreBuckets.map(b => ({
         label: b.range,
         value: b.count,
@@ -161,7 +165,7 @@ export function DashboardPage() {
                     >
                         {topJobBars.length
                             ? <BarChart data={topJobBars} />
-                            : <div className="h-60 flex items-center justify-center text-text-muted text-sm font-medium">Chưa có dữ liệu</div>}
+                            : <div className="h-80 flex items-center justify-center text-text-muted text-base font-medium">Chưa có dữ liệu</div>}
                     </ChartCard>
                 </div>
             )}

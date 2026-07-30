@@ -7,11 +7,12 @@ import { Button } from '@/ui/Button';
 import { Bell, Check, CheckCircle2, Clock } from 'lucide-react';
 import api from '@/api/axios';
 
+// Vấn đề: Trang notifications dùng chung cho HR/admin/candidate nhưng layout sidebar khác nhau; nếu fix cứng 1 layout sẽ phá nav menu của role kia.
+// Giải pháp: Pick layout theo role tại runtime, candidate dùng CandidateLayout, recruiter+admin dùng RecruiterLayout.
 export function NotificationsPage() {
     const { user } = useAuth();
     const navigate = useNavigate();
 
-    // Tự động nhận diện Layout: Nếu là HR/Admin thì dùng Sidebar, Candidate thì dùng Header
     const isRecruiter = user?.role === 'recruiter' || user?.role === 'admin';
     const Layout = isRecruiter ? RecruiterLayout : CandidateLayout;
 
@@ -30,12 +31,12 @@ export function NotificationsPage() {
         }
     };
 
-    // 2. LOGIC REAL-TIME (Cập nhật ngầm mỗi 30 giây)
+    // Vấn đề: User để mở trang notifications nhưng có notif mới sẽ không thấy nếu không refresh; set loading=true mỗi lần poll sẽ làm UI nhấp nháy.
+    // Giải pháp: Polling 30s gọi fetchNotifications nhưng KHÔNG set loading lại — chỉ update list ngầm; cleanup clearInterval khi unmount.
     useEffect(() => {
         fetchNotifications();
 
         const interval = setInterval(() => {
-            // Cập nhật ngầm mà không làm màn hình bị chớp (không set loading = true)
             fetchNotifications();
         }, 30000);
 

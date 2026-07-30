@@ -12,6 +12,8 @@ export function ForgotPassword() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Vấn đề: Backend cố tình trả success kể cả khi email không tồn tại (chống enumerate); FE phải nhất quán hành vi đó để không lộ thông tin.
+    // Giải pháp: Dù response 4xx vẫn navigate sang /verify-otp giữ flow giống nhau cho mọi email; chỉ chặn khi server thực sự lỗi 5xx.
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!email) return setError('Vui lòng nhập email');

@@ -18,6 +18,8 @@ export function JobSearchPage() {
     const handleChange = (e) => setFilters({ ...filters, [e.target.name]: e.target.value });
 
     // Build params để gửi xuống API
+    // Vấn đề: Gửi field rỗng ('') vào params sẽ làm BE filter sai (vd location='' khớp regex empty); UI dropdown lương dùng string preset trong khi BE cần Min/Max number.
+    // Giải pháp: Build params chỉ từ field có giá trị, switch-case map "1000-2000" thành { salaryMin, salaryMax } đúng schema BE.
     const fetchJobs = async () => {
         setLoading(true);
         try {
@@ -28,7 +30,6 @@ export function JobSearchPage() {
             if (filters.level) params.level = filters.level;
             if (filters.type) params.type = filters.type;
 
-            // Logic map Mức lương (string) ra Min/Max (VND) để Backend hiểu
             if (filters.salary) {
                 switch (filters.salary) {
                     case '<1000': params.salaryMax = 1000; break;

@@ -31,11 +31,15 @@ const applicationSchema = new mongoose.Schema({
     isFeatured: { type: Boolean, default: false },
 }, { timestamps: true });
 
-// Đảm bảo 1 ứng viên chỉ được nộp 1 lần cho 1 công việc
+// Vấn đề: Ứng viên có thể spam apply nhiều lần vào cùng 1 job, làm rối danh sách của HR.
+// Giải pháp: Compound unique index trên (job, candidate) để DB tự reject duplicate ngay từ tầng storage.
 applicationSchema.index({ job: 1, candidate: 1 }, { unique: true });
 
-// Thêm index tối ưu performance cho các query thường dùng nhất
-applicationSchema.index({ job: 1, aiScore: -1 });         // Cho HR: Lọc ứng viên của 1 job theo điểm AI giảm dần
-applicationSchema.index({ candidate: 1, createdAt: -1 }); // Cho Candidate: Xem lịch sử nộp đơn mới nhất
+// Vấn đề: HR sort ứng viên theo điểm AI giảm dần — query này chạy thường xuyên, không index sẽ chậm.
+// Giải pháp: Compound index (job, aiScore desc) để Mongo dùng index scan đã sort sẵn.
+applicationSchema.index({ job: 1, aiScore: -1 });
+// Vấn đề: Candidate xem lịch sử nộp đơn mới nhất, sort theo createdAt desc.
+// Giải pháp: Compound index (candidate, createdAt desc) phục vụ pagination ngược thời gian.
+applicationSchema.index({ candidate: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Application', applicationSchema);

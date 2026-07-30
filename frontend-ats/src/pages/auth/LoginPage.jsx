@@ -17,12 +17,13 @@ export function LoginPage() {
 
     const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+    // Vấn đề: Sau login cần đưa user về đúng dashboard theo role; nếu vào từ ProtectedRoute (deep link), user kỳ vọng quay lại trang đó chứ không bị về dashboard.
+    // Giải pháp: Ưu tiên location.state.from (lưu khi ProtectedRoute redirect), fallback theo bảng map role → home; mọi lỗi server map về 1 message thân thiện.
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
         try {
-            // ✅ Kẹp thêm rememberMe vào payload gửi xuống hàm login
             const user = await login({ ...form, rememberMe });
             const from = location.state?.from?.pathname;
             if (from) {

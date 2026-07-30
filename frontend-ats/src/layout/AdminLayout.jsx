@@ -4,12 +4,13 @@ import { LayoutDashboard, Users, Briefcase, Settings, LogOut, Menu, X, ShieldChe
 import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/ui/Logo';
 
+// Vấn đề: Admin có khu vực riêng cần phân biệt rõ với HR/candidate để giảm rủi ro thao tác nhầm; sidebar lặp ở từng trang admin sẽ tốn công sửa khi thêm menu.
+// Giải pháp: Layout dành riêng cho admin với badge SUPER ADMIN, navItems chỉ liệt kê các route admin, không hiển thị bell/notification để giảm noise.
 export function AdminLayout({ children }) {
     const { user, logout } = useAuth();
     const location = useLocation();
     const [mobileOpen, setMobileOpen] = useState(false);
 
-    // Các tính năng "độc quyền" của Admin
     const navItems = [
         { name: 'Tổng quan', path: '/admin/dashboard', icon: LayoutDashboard },
         { name: 'Người dùng', path: '/admin/users', icon: Users },

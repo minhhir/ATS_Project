@@ -16,6 +16,8 @@ export function ChangePasswordForm() {
         setPasswords({ ...passwords, [e.target.name]: e.target.value });
     };
 
+    // Vấn đề: Để backend tự báo "mật khẩu xác nhận sai" sẽ tốn 1 round-trip không cần thiết và lộ rằng user đã gõ sai sau khi load.
+    // Giải pháp: Validate confirmPassword ngay phía client trước khi gọi API, đồng thời reset status cũ để tránh flash message lẫn lộn.
     const handleSubmit = async (e) => {
         e.preventDefault();
         setStatus({ type: '', msg: '' });

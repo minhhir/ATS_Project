@@ -7,6 +7,8 @@ import { Button } from '@/ui/Button';
 import api from '@/api/axios';
 import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 
+// Vấn đề: Tạo và sửa tin gần như giống hệt nhau (cùng form, cùng layout) — viết 2 page riêng sẽ trùng 90% code; URL /create không có id, /:id/edit có id.
+// Giải pháp: Một component dùng useParams để detect mode (isEditMode), prefill khi edit và route đúng API endpoint khi submit.
 export function JobCreatePage() {
     const navigate = useNavigate();
     const { id } = useParams();
@@ -31,15 +33,14 @@ export function JobCreatePage() {
                 const { data } = await api.get(`/jobs/${id}`);
                 const job = data.data;
 
-                // BẪY 1: skills từ API là Array ['React', 'Node.js']
-                // form.skills cần là string 'React, Node.js' để hiển thị trong Input
-                // Phải convert ngược lại trước khi setForm
+                // Vấn đề: BE trả skills dạng array nhưng input UI là chuỗi CSV — gán thẳng sẽ lỗi React render.
+                // Giải pháp: join ', ' khi load, sẽ split lại thành array khi submit.
                 const skillsString = Array.isArray(job.skills)
                     ? job.skills.join(', ')
                     : (job.skills || '');
 
-                // BẪY 2: deadline từ API là ISO string '2026-08-01T00:00:00.000Z'
-                // input type="date" cần format 'YYYY-MM-DD'
+                // Vấn đề: input type="date" chỉ chấp nhận format 'YYYY-MM-DD', BE trả ISO string với giờ.
+                // Giải pháp: slice(0, 10) lấy đúng phần ngày, tránh date input bị reject value và để trống.
                 const deadlineFormatted = job.deadline
                     ? new Date(job.deadline).toISOString().slice(0, 10)
                     : '';
@@ -71,6 +72,8 @@ export function JobCreatePage() {
         setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
+    // Vấn đề: Form lưu salary dạng string, BE schema là Number; skills là CSV string nhưng schema là array; gửi salary='' sẽ thành 0 không phải "không khai báo".
+    // Giải pháp: Number(...) || undefined để trống thật sự là undefined; split skills bằng dấu phẩy, trim từng item, filter rỗng.
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);

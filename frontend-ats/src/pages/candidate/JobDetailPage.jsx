@@ -12,10 +12,10 @@ export function JobDetailPage() {
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    // Kiểm tra xem người đang xem có phải là Nhà tuyển dụng / Admin không
+    // Vấn đề: Trang chi tiết job dùng chung cho cả candidate (apply) và HR/admin (xem/sửa); 2 nhóm có sidebar/menu khác nhau, hardcode 1 layout sẽ sai cho 1 phía.
+    // Giải pháp: Detect role từ context và pick layout component ngay khi render, action sidebar hiển thị theo role.
     const isRecruiter = user?.role === 'recruiter' || user?.role === 'admin';
 
-    // Tự động chọn Layout dựa theo Role
     const Layout = isRecruiter ? RecruiterLayout : CandidateLayout;
 
     // State quản lý dữ liệu Job thật
@@ -54,11 +54,12 @@ export function JobDetailPage() {
         return `$${min} - $${max}`;
     };
 
+    // Vấn đề: User có thể chọn file ảnh hoặc file lớn vượt giới hạn server (5MB) → upload lãng phí băng thông và bị reject; cần tự dọn flow sau khi nộp thành công.
+    // Giải pháp: Validate size phía FE trước khi gọi API, dùng FormData cho multipart, setTimeout 2s cho user thấy success rồi mới redirect.
     const handleApply = async (e) => {
         e.preventDefault();
         if (!file) return setError('Vui lòng chọn file CV (Định dạng PDF)');
 
-        // Validate dung lượng file (Max 5MB)
         if (file.size > 5 * 1024 * 1024) {
             return setError('Kích thước file CV không được vượt quá 5MB');
         }
@@ -71,10 +72,10 @@ export function JobDetailPage() {
         if (coverLetter) formData.append('coverLetter', coverLetter);
 
         try {
-            await api.post(`/applications/${id}/apply`, formData); // Axios đã được fix tự nhận multipart/form-data
+            await api.post(`/applications/${id}/apply`, formData);
             setSuccess(true);
             setTimeout(() => {
-                navigate('/applications'); // Đã chuyển sang trang quản lý đơn theo yêu cầu
+                navigate('/applications');
             }, 2000);
         } catch (err) {
             setError(err.response?.data?.message || 'Có lỗi xảy ra khi nộp CV');
@@ -240,8 +241,8 @@ export function JobDetailPage() {
                 </div>
             </div>
 
-            {/* MODAL NỘP CV */}
-            {/* ✅ Đã tối ưu memory: Không render modal vào DOM nếu đang đăng nhập là HR */}
+            {/* Vấn đề: Modal apply là form lớn, render kể cả khi user là HR sẽ tốn DOM và tăng risk crash khi state không khớp role.
+                Giải pháp: Render modal có điều kiện !isRecruiter && showModal để DOM nhẹ và logic rõ ràng theo role. */}
             {!isRecruiter && showModal && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl w-full max-w-lg p-6 sm:p-8 relative animate-in fade-in zoom-in-95 duration-200">

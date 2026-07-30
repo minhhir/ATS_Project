@@ -20,10 +20,10 @@ export function NotificationBell() {
         }
     };
 
+    // Vấn đề: Realtime cần WebSocket nhưng dự án chưa có infra; nếu poll quá nhanh (5s) sẽ làm sập backend khi nhiều user mở đồng thời.
+    // Giải pháp: Polling 30s là tradeoff hợp lý giữa "gần realtime" và tải server, kèm fetch initial qua setTimeout để tránh setState trong effect cycle đầu.
     useEffect(() => {
-        // ✅ Fix 2: Tăng polling lên 30s để giảm tải server
         const interval = setInterval(fetchNotifications, 30000);
-        // Chạy lần đầu ngoài luồng mount để tránh setState trực tiếp trong effect
         const initial = setTimeout(fetchNotifications, 0);
         return () => {
             clearInterval(interval);
@@ -31,7 +31,8 @@ export function NotificationBell() {
         };
     }, []);
 
-    // ✅ Fix 1: Xử lý Click Outside để đóng Dropdown
+    // Vấn đề: Dropdown không tự đóng khi user click ra ngoài → UX khó chịu, che mất nút khác.
+    // Giải pháp: Bind global mousedown để detect click ngoài bellRef và set open=false; cleanup khi unmount để tránh memory leak.
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (bellRef.current && !bellRef.current.contains(e.target)) {
@@ -42,7 +43,8 @@ export function NotificationBell() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // ✅ Fix 4: Đánh dấu đọc 1 thông báo và chuyển hướng
+    // Vấn đề: User click vào notification mong vừa "đánh dấu đã đọc" vừa nhảy tới trang liên quan; nếu chờ API rồi mới navigate, UX chậm và bị block khi server lỗi.
+    // Giải pháp: Optimistic update state trước, gọi API ngầm, navigate ngay sau để cảm nhận tức thì.
     const handleNotificationClick = async (notif) => {
         setOpen(false);
         if (!notif.isRead) {
@@ -59,8 +61,10 @@ export function NotificationBell() {
         if (notif.link) navigate(notif.link);
     };
 
+    // Vấn đề: Click vào nút "Đọc tất cả" sẽ bubble lên dropdown container → trigger handleClickOutside hoặc đóng menu; gọi API khi không có unread là phí request.
+    // Giải pháp: stopPropagation để giữ menu mở, early return nếu unreadCount=0, optimistic update để badge ẩn ngay.
     const handleMarkAllRead = async (e) => {
-        e.stopPropagation(); // Ngăn sự kiện click lan ra ngoài làm đóng menu
+        e.stopPropagation();
         if (unreadCount === 0) return;
         try {
             await api.put('/notifications/read-all');

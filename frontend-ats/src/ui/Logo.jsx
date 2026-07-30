@@ -1,6 +1,8 @@
 // src/ui/Logo.jsx
 import { Link } from 'react-router-dom';
 
+// Vấn đề: Logo xuất hiện ở header/auth/sidebar; nếu copy markup, đổi tên brand sẽ phải sửa nhiều chỗ và link về home dễ sai.
+// Giải pháp: Component duy nhất nhận className tùy chỉnh, luôn link về "/" để click logo bất kỳ chỗ nào đều quay về landing.
 export function Logo({ className }) {
     return (
         <Link to="/" className={`flex items-center gap-3 ${className || ''}`}>

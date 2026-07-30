@@ -1,5 +1,7 @@
 import { Logo } from '@/ui/Logo';
 
+// Vấn đề: Login/Register/ForgotPassword đều cần cùng một khung 2-cột (form trái + branding phải), copy mỗi trang vừa nặng vừa khó đồng bộ design.
+// Giải pháp: AuthLayout chung để các trang auth chỉ render form ở children, vế phải là decor chỉ hiện trên màn hình lớn.
 export function AuthLayout({ children }) {
     return (
         <div className="min-h-screen flex bg-background">

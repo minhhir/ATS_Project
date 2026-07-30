@@ -4,10 +4,11 @@ import { Button } from '@/ui/Button';
 import { Logo } from '@/ui/Logo';
 import { ArrowRight, Briefcase, Users, Zap, CheckCircle2 } from 'lucide-react';
 
+// Vấn đề: User đã login mà vẫn vào "/" sẽ thấy landing với CTA "đăng ký" — UX rất kỳ; hardcode redirect 1 chỗ thì khó mở rộng.
+// Giải pháp: Map role → home URL, chờ loading xong mới Navigate (replace để không đẩy "/" vào history).
 export function LandingPage() {
     const { user, loading } = useAuth();
 
-    // Nếu đã đăng nhập, đá thẳng vào Dashboard tương ứng
     if (!loading && user) {
         const home = { candidate: '/candidate/jobs', recruiter: '/recruiter/dashboard', admin: '/admin/dashboard' };
         return <Navigate to={home[user.role] || '/login'} replace />;

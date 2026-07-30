@@ -4,7 +4,8 @@ const adminController = require('../controllers/adminController');
 
 const router = express.Router();
 
-// Middleware kiểm tra quyền Admin
+// Vấn đề: Toàn bộ /api/admin chỉ admin mới được dùng, tận dụng isAdmin chung có thể gây lộ thông báo nhập nhằng giữa các domain.
+// Giải pháp: Tạo middleware checkAdmin local với thông báo riêng để admin biết rõ vì sao bị từ chối.
 const checkAdmin = (req, res, next) => {
     if (req.user && req.user.role === 'admin') {
         next();

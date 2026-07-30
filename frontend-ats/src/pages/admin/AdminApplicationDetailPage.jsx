@@ -30,6 +30,8 @@ export function AdminApplicationDetailPage() {
         fetchDetail();
     }, [id]);
 
+    // Vấn đề: Trang đang là chi tiết của đơn vừa xoá, nếu giữ lại sẽ hiển thị data đã không tồn tại; phải báo cho candidate biết đơn bị xoá (BE đã xử lý notify).
+    // Giải pháp: Confirm rồi xoá, navigate về /admin/dashboard để admin xử lý đơn tiếp theo, không quay lại history vì record đã không còn.
     const handleDeleteApplication = async () => {
         if (!window.confirm('Bạn có chắc muốn xóa đơn này vì vi phạm quy định?')) return;
         try {

@@ -15,8 +15,12 @@ export function RegisterPage() {
     const [error, setError] = useState('');
 
     const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    // Vấn đề: User chuyển role từ recruiter→candidate nhưng companyName cũ vẫn còn trong state, sẽ gửi field thừa lên server.
+    // Giải pháp: Reset companyName về '' mỗi lần đổi role.
     const setRole = (role) => setForm(prev => ({ ...prev, role, companyName: '' }));
 
+    // Vấn đề: Nếu submit cả khi password mismatch hoặc gửi companyName cho candidate, server sẽ trả lỗi tốn round-trip; FE/BE cần đồng bộ payload theo role.
+    // Giải pháp: Validate confirmPassword phía client, build payload có conditional spread companyName chỉ khi role=recruiter.
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (form.password !== form.confirmPassword) return setError('Mật khẩu xác nhận không khớp!');

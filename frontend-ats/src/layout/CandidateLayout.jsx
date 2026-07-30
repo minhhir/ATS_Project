@@ -5,6 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import { Logo } from '@/ui/Logo';
 
 
+// Vấn đề: Mỗi trang candidate cần lặp lại sidebar/header, nếu copy-paste sẽ rất khó bảo trì khi đổi menu; mobile cần sidebar riêng có thể đóng/mở.
+// Giải pháp: Layout component bao trang con, dùng state mobileOpen để toggle drawer ở màn nhỏ và useLocation đánh dấu menu active theo path.
 export function CandidateLayout({ children }) {
     const { user, logout } = useAuth();
     const location = useLocation();

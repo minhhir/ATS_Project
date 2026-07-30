@@ -9,21 +9,20 @@ export const useAuth = () => {
     return ctx;
 };
 
+// Vấn đề: accessToken được giữ trong memory nên reload trang sẽ mất; nếu cứ render UI ngay khi chưa biết user là ai, ProtectedRoute sẽ kick về /login dù user thật ra đang đăng nhập.
+// Giải pháp: Khi mount Provider, gọi /auth/refresh để lấy access token mới từ cookie httpOnly, sau đó /me để khôi phục user; trong lúc chờ thì đặt loading=true để route không redirect oan.
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     useEffect(() => {
         const checkSession = async () => {
             try {
-                // Thử refresh để lấy accessToken mới từ cookie
                 const { data: refreshData } = await api.post('/auth/refresh');
                 window.__accessToken = refreshData.accessToken;
 
-                // Lấy thông tin user hiện tại
                 const { data: meData } = await api.get('/auth/me');
                 setUser(meData.user);
             } catch {
-                // Không có session hợp lệ — user chưa đăng nhập, không cần làm gì
                 window.__accessToken = null;
             } finally {
                 setLoading(false);
@@ -46,6 +45,8 @@ export const AuthProvider = ({ children }) => {
         return res.user;
     }, []);
 
+    // Vấn đề: Nếu chỉ clear state phía client, cookie refresh vẫn còn ở browser nên user sẽ tự động login lại sau reload; ngược lại nếu chờ server response mà server lỗi thì user kẹt lại mãi.
+    // Giải pháp: Try gọi /logout để server clear cookie, ignore lỗi network và vẫn clear state local + redirect về trang chủ.
     const logout = useCallback(async () => {
         try {
             await api.post('/auth/logout');

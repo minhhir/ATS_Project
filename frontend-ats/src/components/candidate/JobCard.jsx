@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import { MapPin, DollarSign, Clock, Building } from 'lucide-react';
 
+// Vấn đề: Job card xuất hiện ở landing/search/related; nếu mỗi nơi tự render layout khác nhau sẽ vỡ design system; logo có thể null nên cần fallback.
+// Giải pháp: Component dùng chung nhận prop job, fallback ui-avatars khi không có logo, Link tới /jobs/:id để click bất kỳ chỗ nào trên card cũng vào chi tiết.
 export function JobCard({ job }) {
     return (
         <Link

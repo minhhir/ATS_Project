@@ -2,6 +2,8 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Loader2 } from 'lucide-react';
 
+// Vấn đề: Button submit form khi đang loading có thể bị user click double, gửi 2 request trùng; clsx + twMerge để class custom của caller override Tailwind default đúng cách.
+// Giải pháp: Khi isLoading thì disable button và show spinner, twMerge gộp class với priority cuối cùng cho className caller truyền vào.
 export function Button({ children, className, variant = 'primary', isLoading, disabled, ...props }) {
     const baseStyle = "flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed";
     const variants = {

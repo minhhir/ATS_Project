@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 
-export function DonutChart({ data = [], size = 200, thickness = 28, centerLabel, centerValue }) {
+// Vấn đề: SVG arc với góc đúng 360 độ sẽ collapse về 1 điểm (path lệnh A không vẽ đủ vòng); tính phần trăm/tổng mỗi render dù data không đổi sẽ gây giật.
+// Giải pháp: Trừ 0.0001 rad khi end-start === 1 để arc gần kín nhưng không bị degenerate, dùng useMemo cache arcs theo data/size.
+export function DonutChart({ data = [], size = 240, thickness = 34, centerLabel, centerValue }) {
     const { arcs, total } = useMemo(() => {
         const total = data.reduce((s, d) => s + d.value, 0);
         if (!total) return { arcs: [], total: 0 };
@@ -29,7 +31,7 @@ export function DonutChart({ data = [], size = 200, thickness = 28, centerLabel,
     }, [data, size, thickness]);
 
     if (!data.length || !total) {
-        return <div className="h-60 flex items-center justify-center text-text-muted text-sm font-medium">Chưa có dữ liệu</div>;
+        return <div className="h-72 flex items-center justify-center text-text-muted text-base font-medium">Chưa có dữ liệu</div>;
     }
 
     return (
@@ -44,20 +46,20 @@ export function DonutChart({ data = [], size = 200, thickness = 28, centerLabel,
                     ))}
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-3xl font-black text-text-main">{centerValue ?? total}</div>
-                    {centerLabel && <div className="text-xs font-bold text-text-muted uppercase tracking-wider mt-0.5">{centerLabel}</div>}
+                    <div className="text-4xl font-black text-text-main">{centerValue ?? total}</div>
+                    {centerLabel && <div className="text-sm font-bold text-text-muted uppercase tracking-wider mt-1">{centerLabel}</div>}
                 </div>
             </div>
-            <div className="flex-1 min-w-[140px] space-y-2">
+            <div className="flex-1 min-w-[160px] space-y-2.5">
                 {arcs.map((a, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 text-sm">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <span className="w-3 h-3 rounded-full shrink-0" style={{ background: a.color }} />
+                    <div key={i} className="flex items-center justify-between gap-3 text-base">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: a.color }} />
                             <span className="font-bold text-text-main truncate">{a.label}</span>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2.5 shrink-0">
                             <span className="font-black text-text-main">{a.value}</span>
-                            <span className="text-xs font-bold text-text-muted">{a.pct}%</span>
+                            <span className="text-sm font-bold text-text-muted">{a.pct}%</span>
                         </div>
                     </div>
                 ))}

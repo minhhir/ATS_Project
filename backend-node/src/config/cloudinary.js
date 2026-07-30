@@ -1,3 +1,5 @@
+// Vấn đề: Lưu file (CV, ảnh) trên ổ đĩa server không scale và mất khi container restart.
+// Giải pháp: Cấu hình SDK Cloudinary từ env để upload file lên CDN dùng chung cho cả frontend lẫn AI service.
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 cloudinary.config({

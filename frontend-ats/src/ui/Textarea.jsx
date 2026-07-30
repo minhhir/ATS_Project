@@ -2,6 +2,8 @@ import { forwardRef } from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
+// Vấn đề: Textarea cần style đồng bộ với Input và hiển thị error giống nhau; React Hook Form yêu cầu forwardRef.
+// Giải pháp: Component có sẵn label/error/min-height, twMerge cho phép caller override class an toàn.
 export const Textarea = forwardRef(({ label, error, className, ...props }, ref) => {
     return (
         <div className="flex flex-col gap-1.5 w-full">

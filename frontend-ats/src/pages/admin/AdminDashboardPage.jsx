@@ -22,6 +22,8 @@ export function AdminDashboardPage() {
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
 
+    // Vấn đề: Dashboard admin cần 3 nhóm dữ liệu (stats, reports, analytics) từ endpoint khác nhau, gọi tuần tự sẽ làm trang trắng tới 3-4s.
+    // Giải pháp: Promise.all chạy song song; 1 endpoint fail không ảnh hưởng các phần khác do mỗi setState độc lập sau khi resolve.
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
@@ -43,6 +45,8 @@ export function AdminDashboardPage() {
         fetchDashboardData();
     }, []);
 
+    // Vấn đề: Xoá user kéo theo cascade xoá Job/Application của họ — admin phải hiểu rõ hậu quả; KPI cards phải giảm số ngay để đồng bộ với list.
+    // Giải pháp: confirmMsg khác nhau theo role để cảnh báo cụ thể; sau API success thì optimistic giảm count tương ứng và xoá user khỏi list.
     const handleDeleteUser = async (id, role) => {
         const confirmMsg = role === 'recruiter'
             ? 'Xóa HR này sẽ XÓA TOÀN BỘ Tin tuyển dụng của họ. Bạn có chắc chắn?'
@@ -175,7 +179,7 @@ export function AdminDashboardPage() {
                         >
                             {topRecruitersBars.length
                                 ? <BarChart data={topRecruitersBars} color="#a855f7" />
-                                : <div className="h-60 flex items-center justify-center text-text-muted text-sm font-medium">Chưa có dữ liệu</div>}
+                                : <div className="h-80 flex items-center justify-center text-text-muted text-base font-medium">Chưa có dữ liệu</div>}
                         </ChartCard>
                     </div>
                 </>

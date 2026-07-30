@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { RecruiterLayout } from '@/layout/RecruiterLayout';
 import { Button } from '@/ui/Button';
 import api from '@/api/axios';
-import { Plus, Edit, Trash2, Star, Loader2, Briefcase } from 'lucide-react';
+import { Plus, Edit, Trash2, Flame, Loader2, Briefcase } from 'lucide-react';
 
 export function JobsManagePage() {
     const [jobs, setJobs] = useState([]);
@@ -24,6 +24,8 @@ export function JobsManagePage() {
         }
     };
 
+    // Vấn đề: Xoá tin là thao tác mất data; nếu không confirm dễ click nhầm; sau khi xoá phải refetch toàn bộ list sẽ rất chậm.
+    // Giải pháp: window.confirm hỏi trước, optimistic remove khỏi state local sau khi API success để UI cập nhật ngay không cần refetch.
     const handleDelete = async (id) => {
         if (!window.confirm('Bạn có chắc chắn muốn ẩn/xóa tin này?')) return;
         try {
@@ -31,15 +33,6 @@ export function JobsManagePage() {
             setJobs(jobs.filter(job => job._id !== id));
         } catch (error) {
             alert(error.response?.data?.message || 'Xóa thất bại');
-        }
-    };
-
-    const handleToggleFeature = async (id) => {
-        try {
-            const { data } = await api.patch(`/jobs/${id}/feature`);
-            setJobs(jobs.map(job => job._id === id ? { ...job, isFeatured: data.isFeatured } : job));
-        } catch {
-            alert('Không thể cập nhật trạng thái nổi bật');
         }
     };
 
@@ -90,12 +83,22 @@ export function JobsManagePage() {
                                 {jobs.map((job) => (
                                     <tr key={job._id} className="hover:bg-surface/50 transition-colors group">
                                         <td className="p-4">
-                                            <Link
-                                                to={`/jobs/${job._id}`}
-                                                className="font-bold text-lg text-text-main hover:text-primary hover:underline transition-colors block mb-1"
-                                            >
-                                                {job.title}
-                                            </Link>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Link
+                                                    to={`/jobs/${job._id}`}
+                                                    className="font-bold text-lg text-text-main hover:text-primary hover:underline transition-colors"
+                                                >
+                                                    {job.title}
+                                                </Link>
+                                                {job.isFeatured && (
+                                                    <span
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 text-[10px] font-black uppercase tracking-wide"
+                                                        title="Tin được Quản trị viên đánh dấu Đang HOT"
+                                                    >
+                                                        <Flame size={12} className="fill-current" /> Hot
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-sm text-text-muted">{job.location} • {job.type}</div>
                                         </td>
                                         <td className="p-4">
@@ -111,13 +114,6 @@ export function JobsManagePage() {
                                         </td>
                                         <td className="p-4">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleToggleFeature(job._id)}
-                                                    className={`p-2 rounded-lg transition-colors ${job.isFeatured ? 'bg-amber-100 text-amber-500' : 'bg-surface text-text-muted hover:text-amber-500'}`}
-                                                    title="Đánh dấu nổi bật"
-                                                >
-                                                    <Star size={18} className={job.isFeatured ? 'fill-current' : ''} />
-                                                </button>
                                                 <Link to={`/recruiter/jobs/${job._id}/edit`} className="p-2 bg-surface text-text-muted hover:text-primary hover:bg-primary-light/50 rounded-lg transition-colors inline-flex" title="Sửa tin">
                                                     <Edit size={18} />
                                                 </Link>

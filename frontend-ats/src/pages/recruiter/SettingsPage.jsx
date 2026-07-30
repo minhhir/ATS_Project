@@ -51,13 +51,14 @@ export function SettingsPage() {
         }
     };
 
+    // Vấn đề: Submit có cả text + file ảnh logo, JSON không gửi file được; updateUser context phải sync ngay để sidebar/header thấy logo mới mà không cần F5.
+    // Giải pháp: Dùng FormData đa phần, sau khi BE trả user mới thì gọi updateUser để các component dùng useAuth re-render, reset file state để không upload lại.
     const handleSubmitProfile = async (e) => {
         e.preventDefault();
         setLoading(true);
         setMessage({ type: '', text: '' });
 
         try {
-            // ✅ BẮT BUỘC DÙNG FORMDATA ĐỂ CHỨA CẢ CHỮ LẪN ẢNH
             const formData = new FormData();
             formData.append('name', form.name);
             formData.append('phone', form.phone);
@@ -71,11 +72,10 @@ export function SettingsPage() {
 
             const { data } = await api.put('/auth/profile', formData);
 
-            // Cập nhật lại Context để header/sidebar đổi ảnh ngay lập tức
             if (updateUser) updateUser(data.data);
 
             setMessage({ type: 'success', text: 'Cập nhật hồ sơ thành công!' });
-            setAvatarFile(null); // Reset file
+            setAvatarFile(null);
         } catch (error) {
             setMessage({ type: 'error', text: error.response?.data?.message || 'Lưu thất bại. Vui lòng thử lại.' });
         } finally {

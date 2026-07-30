@@ -6,6 +6,8 @@ const AppError = require('../utils/AppError');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Vấn đề: Dùng 1 token duy nhất buộc phải chọn giữa "ngắn hạn → hay phải đăng nhập lại" và "dài hạn → rủi ro lộ token"; cần cả role để middleware phân quyền nhanh không phải truy DB.
+// Giải pháp: Cấp đôi token — accessToken ngắn hạn kèm role, refreshToken dài hạn chỉ chứa id để rotate khi access hết hạn.
 const generateTokens = (userId, role) => {
     const accessToken = jwt.sign(
         { id: userId, role },
@@ -20,14 +22,16 @@ const generateTokens = (userId, role) => {
     return { accessToken, refreshToken };
 };
 
-/** Tạo OTP 6 chữ số ngẫu nhiên (crypto-safe) */
+// Vấn đề: Math.random không an toàn về mặt mật mã, kẻ tấn công có thể dò OTP.
+// Giải pháp: Dùng crypto.randomInt để sinh OTP 6 số ngẫu nhiên đủ entropy.
 const generateOTP = () =>
     String(crypto.randomInt(100000, 999999));
 
 // ─── Auth service methods ─────────────────────────────────────────────────────
 
+// Vấn đề: Nếu để Mongoose tự validate, lỗi trả về dạng kỹ thuật (cast/validation) khó cho FE; user có thể tự gửi role='admin' để chiếm quyền.
+// Giải pháp: Validate sớm bằng regex/length, whitelist role chỉ candidate|recruiter, đồng thời reject email trùng trước khi insert.
 exports.register = async ({ name, email, password, role, companyName }) => {
-    // FIXED: Thêm validation đầu vào để tránh lỗi 500 từ Mongoose (Bug 15)
     if (!name?.trim() || name.trim().length < 2)
         throw new AppError('Họ tên phải từ 2 ký tự trở lên', 400);
     const emailRe = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
@@ -39,6 +43,8 @@ exports.register = async ({ name, email, password, role, companyName }) => {
     const existing = await User.findOne({ email });
     if (existing) throw new AppError('Email đã được sử dụng', 400);
 
+    // Vấn đề: User có thể submit role='admin' qua API để leo thang đặc quyền.
+    // Giải pháp: Whitelist role hợp lệ, fallback về candidate nếu input lạ.
     const allowedRoles = ['candidate', 'recruiter'];
     const safeRole = allowedRoles.includes(role) ? role : 'candidate';
 
@@ -46,10 +52,11 @@ exports.register = async ({ name, email, password, role, companyName }) => {
     if (safeRole === 'recruiter') userData.companyName = companyName;
 
     const user = await User.create(userData);
-    // FIXED: Trả về đồng nhất giống hàm login (trả cả tokens và user)
     return { tokens: generateTokens(user._id, user.role), user };
 };
 
+// Vấn đề: Trả error khác nhau cho "email không tồn tại" vs "sai mật khẩu" sẽ giúp attacker enumerate email; password field bị select:false trong schema.
+// Giải pháp: Chỉ trả 1 thông báo chung "Email hoặc mật khẩu không đúng", và .select('+password') để có field so sánh.
 exports.login = async ({ email, password }) => {
     const user = await User.findOne({ email }).select('+password');
     if (!user || !(await user.comparePassword(password))) {
@@ -60,9 +67,10 @@ exports.login = async ({ email, password }) => {
     return { tokens: generateTokens(user._id, user.role), user };
 };
 
+// Vấn đề: Access token hết hạn nhanh (security) nhưng user không muốn login lại liên tục; jwt.verify throw nhiều exception khác nhau.
+// Giải pháp: Dùng refresh token dài hạn để issue access token mới; gói mọi lỗi verify thành 401 để FE biết phải logout.
 exports.refreshToken = async (token) => {
     try {
-        // FIXED: Bọc try-catch để bắt lỗi token hết hạn/sai chữ ký
         const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
         const user = await User.findById(decoded.id);
 
@@ -78,6 +86,8 @@ exports.refreshToken = async (token) => {
 
 // ─── Reset password flow ───────────────────────────────────────────
 
+// Vấn đề: Nếu trả "email không tồn tại", attacker dùng endpoint này để dò email user; OTP plaintext nếu bị lưu sẽ thành key vào tài khoản.
+// Giải pháp: Luôn trả success:true bất kể email có tồn tại hay không; OTP được hash bcrypt và có expiry 10 phút.
 exports.forgotPassword = async ({ email }) => {
     const user = await User.findOne({ email });
 
@@ -93,6 +103,8 @@ exports.forgotPassword = async ({ email }) => {
         resetOTPVerified: false,
     });
 
+    // Vấn đề: Chưa có service email thật, dev cần xem OTP để test flow.
+    // Giải pháp: Log OTP ra console chỉ khi không phải production.
     if (process.env.NODE_ENV !== 'production') {
         console.log(`\n📧 [DEV] OTP reset password cho ${email}: ${otp}\n`);
     }
@@ -100,6 +112,8 @@ exports.forgotPassword = async ({ email }) => {
     return { success: true };
 };
 
+// Vấn đề: Cho user reset password ngay sau khi nhập OTP đúng dễ bị bot brute-force OTP rồi chiếm tài khoản; OTP có thể được gửi dạng số khiến bcrypt.compare crash.
+// Giải pháp: Tách verify OTP thành bước riêng (set resetOTPVerified=true), ép kiểu String(otp) trước khi compare.
 exports.verifyOTP = async ({ email, otp }) => {
     if (!otp) throw new AppError('Vui lòng cung cấp mã OTP', 400);
 
@@ -128,6 +142,8 @@ exports.verifyOTP = async ({ email, otp }) => {
     return { success: true };
 };
 
+// Vấn đề: Cần đảm bảo chỉ ai đã verify OTP ở bước trước mới được đổi password, và OTP không bị reuse cho các lần reset sau.
+// Giải pháp: Check resetOTPVerified=true + expiry còn hiệu lực, sau khi đổi password thì xoá hết các field OTP.
 exports.resetPassword = async ({ email, otp, newPassword }) => {
     if (!newPassword || newPassword.length < 6) {
         throw new AppError('Mật khẩu mới phải ít nhất 6 ký tự', 400);
