@@ -1,19 +1,165 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply antialiased bg-background text-text-main font-sans;
+    @apply antialiased bg-background text-text-main font-sans text-base;
+    /* 1.6 thay vì 1.5 mặc định: tiếng Việt có dấu xếp tầng (dấu mũ chồng dấu thanh:
+       "ế" "ộ" "ữ" "ặ"), khoảng dòng chật làm dấu dòng dưới chạm chân chữ dòng trên. */
+    line-height: 1.6;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Vấn đề: Bỏ outline mặc định cho đẹp sẽ khiến user dùng bàn phím mất hoàn toàn dấu hiệu focus.
+     Giải pháp: Ẩn outline nhưng thay bằng ring màu accent, chỉ hiện khi focus bằng bàn phím. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary/40 ring-offset-2 ring-offset-background;
+  }
+
+  /* Cân nặng dừng ở 700. Phân cấp tiêu đề tạo bằng cân nặng + màu, không bằng cỡ chữ to. */
+  h1, h2, h3, h4 {
+    @apply font-semibold text-text-main;
+  }
+
+  ::selection {
+    @apply bg-primary/15 text-primary-800;
+  }
+
+  /* Vấn đề: Chrome tô nền vàng cho ô autofill, phá vỡ toàn bộ style input đã thiết kế.
+     Giải pháp: Dùng inset box-shadow phủ lại nền trắng — cách duy nhất ghi đè được autofill WebKit. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+    -webkit-text-fill-color: #0f172a;
+    caret-color: #0f172a;
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  /* Vấn đề: Người dùng bật "giảm chuyển động" trong OS vẫn bị animation làm chóng mặt. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
-/* Custom Scrollbar siêu mượt */
+@layer components {
+  /* Vấn đề: Phân vùng bằng shadow làm mọi thứ trông như đang lơ lửng, và khi mọi card đều
+     có shadow thì shadow không còn nói lên điều gì.
+     Giải pháp: Card phân vùng bằng ĐƯỜNG VIỀN 1px, không đổ bóng. Shadow để dành riêng cho
+     dropdown/modal — thứ thực sự nổi lên trên mặt phẳng trang. */
+  .card {
+    @apply bg-surface-raised border border-border rounded-lg;
+  }
+
+  /* Card click được: phản hồi bằng đổi màu viền và nền, không bằng shadow hay nhấc lên. */
+  .card-interactive {
+    @apply card transition-colors duration-200 ease-smooth hover:border-border-strong hover:bg-surface;
+  }
+
+  /* Lớp nổi thật sự: dropdown, popover, menu ngữ cảnh. Bo 12px + shadow-lg. */
+  .overlay {
+    @apply bg-surface-raised border border-border rounded-2xl shadow-lg;
+  }
+
+  /* Nhãn nhóm nhỏ in hoa cho tiêu đề section trong sidebar và form. */
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-wide text-text-subtle;
+  }
+
+  .page-title {
+    @apply text-2xl font-bold text-text-main;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-text-muted mt-1;
+  }
+
+  /* Vấn đề: Trạng thái loading dùng spinner toàn trang gây "nhảy" layout khi data về.
+     Giải pháp: Khối skeleton giữ đúng chỗ, có dải sáng chạy qua để báo hiệu đang tải. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-sm bg-surface-sunken;
+  }
+
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full animate-shimmer;
+    background-image: linear-gradient(
+      90deg,
+      rgb(255 255 255 / 0) 0%,
+      rgb(255 255 255 / 0.6) 50%,
+      rgb(255 255 255 / 0) 100%
+    );
+  }
+}
+
+@layer utilities {
+  /* Dùng cho thanh filter/tab cuộn ngang trên mobile — vẫn cuộn được nhưng không lộ scrollbar. */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Vấn đề: Bảng/biểu đồ rộng làm cả trang trượt ngang trên mobile.
+     Giải pháp: Bọc phần rộng trong .scroll-x để chỉ khối đó cuộn, body giữ nguyên. */
+  .scroll-x {
+    @apply overflow-x-auto overscroll-x-contain;
+  }
+
+  /* Vấn đề: Mỗi trang tự chọn padding thì mật độ trôi dần mỗi nơi một kiểu, và ba vai trò
+     đang trông giống nhau y hệt dù công việc của họ khác nhau hoàn toàn.
+     Giải pháp: Ba mức mật độ gắn với ba loại việc thật, phân biệt vai trò bằng MẬT ĐỘ
+     chứ không bằng cách đổi màu chủ đạo cho từng role.
+
+     comfortable — trang auth: người dùng làm đúng một việc (nhập form). Khoảng trắng rộng
+                   giúp dồn toàn bộ chú ý vào ô nhập, không có gì khác để quét.
+     default     — trang ứng viên: đọc mô tả công việc, tức là đọc văn xuôi. Cần khoảng thở
+                   giữa các khối nhưng vẫn thấy được vài tin trong một màn.
+     compact     — trang HR/admin: quét hàng chục dòng ứng viên mỗi lượt. Mỗi pixel dọc tiết
+                   kiệm được là thêm một dòng dữ liệu thấy mà không phải cuộn. */
+  .density-comfortable {
+    @apply p-6 sm:p-10 space-y-8;
+  }
+
+  .density-default {
+    @apply p-5 sm:p-8 space-y-6;
+  }
+
+  .density-compact {
+    @apply p-4 sm:p-6 space-y-5;
+  }
+}
+
+/* Vấn đề: lucide-react mặc định stroke-width 2; ở cỡ 16-20px nét icon nặng hơn nét chữ
+   đứng cạnh nên icon "hét" to hơn nhãn của nó. Sửa từng chỗ thì có hàng trăm icon.
+   Giải pháp: Mọi icon lucide đều mang class `lucide`, đặt stroke-width một lần tại đây.
+
+   Quy tắc này CỐ Ý nằm ngoài @layer base. Tailwind purge cả base layer theo content scan:
+   selector kiểu element (body, ::selection) luôn được giữ, nhưng `.lucide` là class selector
+   mà chuỗi "lucide" chỉ được lucide-react gắn vào lúc runtime, không xuất hiện trong file JSX
+   nào — đặt trong @layer base thì rule bị loại khỏi bundle mà không báo lỗi. */
+.lucide {
+  stroke-width: 1.5;
+}
+
+/* Scrollbar mảnh, màu trung tính */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -22,9 +168,18 @@
 
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 3px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+  background-clip: content-box;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }

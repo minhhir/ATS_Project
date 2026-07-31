@@ -1,33 +1,50 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Skeleton } from '@/ui/Skeleton';
 
 // Vấn đề: KPI card cần hiển thị cả số liệu và mức tăng/giảm so với kỳ trước; trend 0% và undefined có ý nghĩa khác (không đổi vs không có dữ liệu).
 // Giải pháp: hasGrowth check theo typeof number để phân biệt undefined; chọn icon/màu trend theo sign số để user nhìn 1 phát hiểu xu hướng.
-export function StatCard({ icon: Icon, label, value, growthPct, bgClass = 'bg-primary/10', colorClass = 'text-primary', hint }) {
+//
+// Vấn đề: Bản cũ đặt một khối icon 56px nền tint ở góc trên, to gần gấp đôi con số bên dưới —
+// thứ đập vào mắt trước lại là hình trang trí, không phải số liệu HR cần đọc.
+// Giải pháp: Bỏ khối icon, icon thu về 14px màu trung tính đứng cạnh nhãn. Con số là phần tử
+// lớn nhất và đậm nhất trong card. Phân vùng bằng viền 1px, không shadow.
+export function StatCard({ icon: Icon, label, value, growthPct, hint, loading }) {
     const hasGrowth = typeof growthPct === 'number';
     const isUp = hasGrowth && growthPct > 0;
     const isDown = hasGrowth && growthPct < 0;
     const TrendIcon = isUp ? TrendingUp : isDown ? TrendingDown : Minus;
-    const trendColor = isUp ? 'text-success' : isDown ? 'text-danger' : 'text-text-muted';
-    const trendBg = isUp ? 'bg-success/10' : isDown ? 'bg-danger/10' : 'bg-surface';
+    // Màu chỉ dùng cho xu hướng thật (tăng/giảm), không dùng để tô cho đẹp.
+    const trendColor = isUp ? 'text-success' : isDown ? 'text-danger' : 'text-text-subtle';
+
+    if (loading) {
+        return (
+            <div className="border border-border rounded-lg bg-surface-raised p-4" aria-busy="true">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-7 w-16 mt-2.5" />
+                <Skeleton className="h-3 w-32 mt-2.5" />
+            </div>
+        );
+    }
 
     return (
-        <div className="bg-white p-6 rounded-3xl border border-border shadow-sm">
-            <div className="flex items-start justify-between mb-4">
-                {Icon && (
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${bgClass} ${colorClass}`}>
-                        <Icon size={28} />
-                    </div>
-                )}
+        <div className="border border-border rounded-lg bg-surface-raised p-4">
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 min-w-0">
+                    {Icon && <Icon size={14} className="text-text-subtle shrink-0" aria-hidden="true" />}
+                    <p className="text-xs text-text-muted truncate">{label}</p>
+                </div>
                 {hasGrowth && (
-                    <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-black ${trendBg} ${trendColor}`}>
-                        <TrendIcon size={16} />
+                    <span className={`inline-flex items-center gap-0.5 text-xs font-medium shrink-0 ${trendColor}`}>
+                        <TrendIcon size={13} aria-hidden="true" />
                         {isUp ? '+' : ''}{growthPct}%
-                    </div>
+                    </span>
                 )}
             </div>
-            <p className="text-sm font-bold text-text-muted uppercase tracking-wider">{label}</p>
-            <h3 className="text-4xl font-black text-text-main mt-1.5 leading-tight">{value}</h3>
-            {hint && <p className="text-sm text-text-muted mt-2.5 font-medium">{hint}</p>}
+
+            {/* Con số: 28px/600 — bậc cỡ chữ lớn nhất của hệ thống, dành riêng cho thứ này */}
+            <p className="text-2xl font-semibold text-text-main mt-1.5 tabular-nums">{value}</p>
+
+            {hint && <p className="text-xs text-text-subtle mt-1.5">{hint}</p>}
         </div>
     );
 }

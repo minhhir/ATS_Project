@@ -79,7 +79,7 @@ export function NotificationsPage() {
                 {/* Header trang */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
                     <div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold text-text-main flex items-center gap-3">
+                        <h1 className="text-2xl font-bold text-text-main flex items-center gap-3">
                             <Bell className="text-primary" size={28} />
                             Tất cả thông báo
                         </h1>
@@ -95,46 +95,58 @@ export function NotificationsPage() {
                 </div>
 
                 {/* Danh sách thông báo */}
-                <div className="bg-white rounded-3xl border border-border shadow-sm overflow-hidden min-h-[50vh]">
+                {/* Card tĩnh: phân vùng bằng viền 1px, bo 8px. Bỏ shadow-sm — config đang ghim nó về
+                    `none` nên nó vốn không vẽ gì, để lại chỉ khiến code nói sai thứ nó làm. */}
+                <div className="bg-surface-raised rounded-lg border border-border overflow-hidden min-h-[50vh]">
                     {loading ? (
                         <div className="flex flex-col items-center justify-center h-64 text-text-muted font-semibold">
                             Đang tải thông báo...
                         </div>
                     ) : notifications.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                            <div className="w-16 h-16 bg-surface rounded-full flex items-center justify-center mb-4 text-text-muted">
-                                <CheckCircle2 size={32} />
-                            </div>
-                            <h3 className="text-xl font-bold text-text-main mb-2">Bạn đã xem hết thông báo</h3>
+                            {/* Icon trần, bỏ ô tròn nền tint: cái vòng xám chỉ làm icon to gấp đôi mà
+                                không thêm nghĩa gì — thứ cần đọc ở đây là dòng chữ bên dưới. */}
+                            <CheckCircle2 size={36} className="text-text-muted mb-4" aria-hidden="true" />
+                            <h3 className="text-lg font-bold text-text-main mb-2">Bạn đã xem hết thông báo</h3>
                             <p className="text-text-muted">Khi có hoạt động mới, chúng sẽ xuất hiện ở đây.</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-border">
                             {notifications.map((notif) => (
-                                <div
+                                // Từng là <div onClick>: cả danh sách thông báo không Tab tới được.
+                                // w-full + text-left để <button> giữ nguyên khối full-width, chữ căn trái.
+                                <button
+                                    type="button"
                                     key={notif._id}
                                     onClick={() => handleNotificationClick(notif)}
-                                    className={`p-6 flex gap-4 cursor-pointer hover:bg-surface transition-colors ${notif.isRead ? 'opacity-70 bg-white' : 'bg-primary/5'
+                                    className={`w-full text-left p-6 flex gap-4 cursor-pointer hover:bg-surface transition-colors ${notif.isRead ? 'opacity-70 bg-white' : 'bg-primary/5'
                                         }`}
                                 >
+                                    {/* <button> chỉ nhận phrasing content, nên h4/p/div bên trong đổi sang
+                                        <span className="block">. Bỏ cấp h4 là đúng: dòng thông báo không
+                                        phải tiêu đề của tài liệu, và một trang có 20 thông báo sẽ sinh ra
+                                        20 heading rỗng nghĩa làm hỏng danh sách heading của screen reader. */}
                                     {/* Chấm tròn báo trạng thái */}
-                                    <div className="mt-1.5 shrink-0">
-                                        <div className={`w-3 h-3 rounded-full ${notif.isRead ? 'bg-border' : 'bg-primary animate-pulse ring-4 ring-primary/20'}`}></div>
-                                    </div>
+                                    <span className="block mt-1.5 shrink-0">
+                                        {/* Bỏ animate-pulse + ring-4: một trang có thể có hàng chục dòng
+                                            chưa đọc, mấy chục chấm cùng nhấp nháy làm cả danh sách rung.
+                                            Chấm đặc màu accent đã phân biệt đủ với chấm xám. */}
+                                        <span className={`block w-3 h-3 rounded-full ${notif.isRead ? 'bg-border' : 'bg-primary'}`}></span>
+                                    </span>
 
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className={`text-base mb-1 ${notif.isRead ? 'font-semibold text-text-main' : 'font-extrabold text-primary'}`}>
+                                    <span className="block flex-1 min-w-0">
+                                        <span className={`block text-base mb-1 ${notif.isRead ? 'font-semibold text-text-main' : 'font-bold text-primary'}`}>
                                             {notif.title}
-                                        </h4>
-                                        <p className="text-sm text-text-muted font-medium mb-3 leading-relaxed">
+                                        </span>
+                                        <span className="block text-sm text-text-muted font-medium mb-3 leading-relaxed">
                                             {notif.message}
-                                        </p>
-                                        <div className="flex items-center gap-2 text-xs text-text-muted font-semibold">
+                                        </span>
+                                        <span className="flex items-center gap-2 text-xs text-text-muted font-semibold">
                                             <Clock size={14} />
                                             {notif.createdAt ? new Date(notif.createdAt).toLocaleString('vi-VN') : 'Vừa xong'}
-                                        </div>
-                                    </div>
-                                </div>
+                                        </span>
+                                    </span>
+                                </button>
                             ))}
                         </div>
                     )}

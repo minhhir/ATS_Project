@@ -4,8 +4,15 @@ import { RecruiterLayout } from '@/layout/RecruiterLayout';
 import { Input } from '@/ui/Input';
 import { Textarea } from '@/ui/Textarea';
 import { Button } from '@/ui/Button';
+import { Skeleton, SkeletonText } from '@/ui/Skeleton';
 import api from '@/api/axios';
-import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
+
+// Class dùng chung cho <select> để khớp đúng chiều cao và bo góc của component Input.
+const selectClasses =
+    'form-select w-full h-11 pl-3 pr-9 rounded-sm border border-border bg-white text-sm text-text-main ' +
+    'cursor-pointer transition-colors duration-200 ease-smooth hover:border-border-strong ' +
+    'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25';
 
 // Vấn đề: Tạo và sửa tin gần như giống hệt nhau (cùng form, cùng layout) — viết 2 page riêng sẽ trùng 90% code; URL /create không có id, /:id/edit có id.
 // Giải pháp: Một component dùng useParams để detect mode (isEditMode), prefill khi edit và route đúng API endpoint khi submit.
@@ -101,13 +108,21 @@ export function JobCreatePage() {
         }
     };
 
-    // Spinner khi đang tải dữ liệu cũ (chỉ ở Edit mode)
+    // Skeleton khi đang tải dữ liệu cũ (chỉ ở Edit mode) — dựng đúng khung form sắp hiện
     if (pageLoading) {
         return (
             <RecruiterLayout>
-                <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                    <span className="text-sm font-medium text-text-muted">Đang tải thông tin...</span>
+                <div className="max-w-3xl space-y-4" aria-busy="true" aria-label="Đang tải tin tuyển dụng">
+                    <Skeleton className="h-7 w-64" />
+                    <div className="border border-border rounded-lg p-5 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Skeleton className="h-11" />
+                            <Skeleton className="h-11" />
+                            <Skeleton className="h-11" />
+                            <Skeleton className="h-11" />
+                        </div>
+                        <SkeletonText lines={4} />
+                    </div>
                 </div>
             </RecruiterLayout>
         );
@@ -115,108 +130,131 @@ export function JobCreatePage() {
 
     return (
         <RecruiterLayout>
-            <div className="mb-6">
-                <Link to="/recruiter/jobs" className="inline-flex items-center gap-2 text-sm font-semibold text-text-muted hover:text-primary transition-colors mb-4">
-                    <ArrowLeft size={16} /> Quay lại danh sách
-                </Link>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-text-main">
-                    {isEditMode ? 'Chỉnh sửa tin tuyển dụng' : 'Đăng tin tuyển dụng mới'}
-                </h1>
-                <p className="text-text-muted mt-1 font-medium">
-                    {isEditMode
-                        ? 'Cập nhật thông tin bên dưới và lưu lại.'
-                        : 'Điền đầy đủ thông tin bên dưới để thu hút ứng viên tiềm năng.'}
-                </p>
-            </div>
-
-            {error && (
-                <div className="mb-6 flex items-center gap-2 p-4 bg-danger/10 border border-danger/20 text-danger rounded-xl text-sm font-medium">
-                    <AlertCircle size={18} /><span>{error}</span>
-                </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="bg-white p-6 sm:p-8 rounded-2xl border border-border shadow-sm space-y-8">
-
-                {/* Thông tin cơ bản */}
-                <div className="space-y-6">
-                    <h3 className="text-lg font-extrabold text-text-main border-b border-border pb-2">1. Thông tin cơ bản</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input name="title" label="Tiêu đề công việc" placeholder="VD: Senior Frontend Developer" value={form.title} onChange={handleChange} required />
-                        <Input name="location" label="Địa điểm làm việc" placeholder="VD: Hà Nội, Remote..." value={form.location} onChange={handleChange} required />
-
-                        <div className="flex flex-col gap-1.5 w-full">
-                            <label className="text-sm font-semibold text-text-main">Cấp bậc</label>
-                            <select name="level" value={form.level} onChange={handleChange} className="w-full px-4 py-2.5 rounded-lg border border-border bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm">
-                                <option value="intern">Intern / Thực tập sinh</option>
-                                <option value="fresher">Fresher</option>
-                                <option value="junior">Junior</option>
-                                <option value="mid">Mid-level</option>
-                                <option value="senior">Senior</option>
-                                <option value="lead">Lead / Manager</option>
-                            </select>
-                        </div>
-
-                        <div className="flex flex-col gap-1.5 w-full">
-                            <label className="text-sm font-semibold text-text-main">Hình thức làm việc</label>
-                            <select name="type" value={form.type} onChange={handleChange} className="w-full px-4 py-2.5 rounded-lg border border-border bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm">
-                                <option value="full-time">Full-time (Toàn thời gian)</option>
-                                <option value="part-time">Part-time (Bán thời gian)</option>
-                                <option value="remote">Remote (Từ xa)</option>
-                                <option value="contract">Contract (Hợp đồng)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Lương & Thời hạn */}
-                <div className="space-y-6">
-                    <h3 className="text-lg font-extrabold text-text-main border-b border-border pb-2">2. Phúc lợi & Thời hạn</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <Input name="salaryMin" label="Lương tối thiểu ($)" type="number" placeholder="VD: 1000" value={form.salaryMin} onChange={handleChange} />
-                        <Input name="salaryMax" label="Lương tối đa ($)" type="number" placeholder="VD: 2000" value={form.salaryMax} onChange={handleChange} />
-                        <Input name="deadline" label="Hạn nộp hồ sơ" type="date" value={form.deadline} onChange={handleChange} />
-                    </div>
-                </div>
-
-                {/* Mô tả chi tiết */}
-                <div className="space-y-6">
-                    <h3 className="text-lg font-extrabold text-text-main border-b border-border pb-2">3. Mô tả chi tiết</h3>
-                    <Input
-                        name="skills"
-                        label="Kỹ năng yêu cầu (Cách nhau bằng dấu phẩy)"
-                        placeholder="VD: React, Node.js, TypeScript"
-                        value={form.skills}
-                        onChange={handleChange}
-                        required
-                    />
-                    <Textarea
-                        name="description"
-                        label="Mô tả công việc (JD)"
-                        placeholder="Mô tả công việc ứng viên cần làm..."
-                        value={form.description}
-                        onChange={handleChange}
-                        required
-                    />
-                    <Textarea
-                        name="requirements"
-                        label="Yêu cầu ứng viên"
-                        placeholder="Các yêu cầu về kinh nghiệm, bằng cấp..."
-                        value={form.requirements}
-                        onChange={handleChange}
-                        required
-                    />
-                </div>
-
-                <div className="pt-4 border-t border-border flex justify-end gap-4">
-                    <Link to="/recruiter/jobs">
-                        <Button variant="outline" type="button">Hủy bỏ</Button>
+            {/* Form nhập liệu dài nên giới hạn bề rộng: dòng input quá rộng làm mắt phải quét
+                cả màn hình mới nối được nhãn với ô nhập tương ứng. */}
+            <div className="max-w-3xl space-y-6">
+                <div>
+                    <Link
+                        to="/recruiter/jobs"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted hover:text-text-main transition-colors rounded-sm"
+                    >
+                        <ArrowLeft size={15} aria-hidden="true" /> Quay lại danh sách
                     </Link>
-                    <Button type="submit" isLoading={loading}>
-                        {isEditMode ? 'Lưu thay đổi' : 'Đăng tin ngay'}
-                    </Button>
+                    <h1 className="text-2xl font-semibold text-text-main mt-3">
+                        {isEditMode ? 'Chỉnh sửa tin tuyển dụng' : 'Đăng tin tuyển dụng'}
+                    </h1>
+                    <p className="text-sm text-text-muted mt-1">
+                        {isEditMode
+                            ? 'Thay đổi sẽ áp dụng ngay với ứng viên đang xem tin này.'
+                            : 'Tin sẽ hiển thị với ứng viên ngay sau khi đăng.'}
+                    </p>
                 </div>
 
-            </form>
+                {error && (
+                    <div
+                        role="alert"
+                        className="flex items-start gap-2.5 p-3 rounded-sm border border-danger-100 bg-danger-50 text-sm text-danger-700"
+                    >
+                        <AlertCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                        <span>{error}</span>
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Ba khối <fieldset> thay cho ba <h3>: nhóm trường có <legend> đúng ngữ nghĩa
+                        nên screen reader đọc được "bạn đang ở nhóm Thông tin cơ bản". */}
+                    <fieldset className="border border-border rounded-lg bg-surface-raised">
+                        <legend className="sr-only">Thông tin cơ bản</legend>
+                        <div className="px-5 py-3 border-b border-border-subtle">
+                            <h2 className="text-sm font-semibold text-text-main">Thông tin cơ bản</h2>
+                        </div>
+                        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input name="title" label="Tiêu đề công việc" placeholder="Senior Frontend Developer" value={form.title} onChange={handleChange} required />
+                            <Input name="location" label="Địa điểm làm việc" placeholder="Hà Nội, Remote…" value={form.location} onChange={handleChange} required />
+
+                            <div className="flex flex-col gap-1.5 w-full">
+                                <label htmlFor="job-level" className="text-sm font-semibold text-text-main">Cấp bậc</label>
+                                <select id="job-level" name="level" value={form.level} onChange={handleChange} className={selectClasses}>
+                                    <option value="intern">Intern / Thực tập sinh</option>
+                                    <option value="fresher">Fresher</option>
+                                    <option value="junior">Junior</option>
+                                    <option value="mid">Mid-level</option>
+                                    <option value="senior">Senior</option>
+                                    <option value="lead">Lead / Manager</option>
+                                </select>
+                            </div>
+
+                            <div className="flex flex-col gap-1.5 w-full">
+                                <label htmlFor="job-type" className="text-sm font-semibold text-text-main">Hình thức làm việc</label>
+                                <select id="job-type" name="type" value={form.type} onChange={handleChange} className={selectClasses}>
+                                    <option value="full-time">Full-time (Toàn thời gian)</option>
+                                    <option value="part-time">Part-time (Bán thời gian)</option>
+                                    <option value="remote">Remote (Từ xa)</option>
+                                    <option value="contract">Contract (Hợp đồng)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-border rounded-lg bg-surface-raised">
+                        <legend className="sr-only">Lương và thời hạn</legend>
+                        <div className="px-5 py-3 border-b border-border-subtle">
+                            <h2 className="text-sm font-semibold text-text-main">Lương & thời hạn</h2>
+                        </div>
+                        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Input name="salaryMin" label="Lương tối thiểu ($)" type="number" placeholder="1000" value={form.salaryMin} onChange={handleChange} />
+                            <Input name="salaryMax" label="Lương tối đa ($)" type="number" placeholder="2000" value={form.salaryMax} onChange={handleChange} />
+                            <Input name="deadline" label="Hạn nộp hồ sơ" type="date" value={form.deadline} onChange={handleChange} />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border border-border rounded-lg bg-surface-raised">
+                        <legend className="sr-only">Mô tả chi tiết</legend>
+                        <div className="px-5 py-3 border-b border-border-subtle">
+                            <h2 className="text-sm font-semibold text-text-main">Mô tả chi tiết</h2>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <Input
+                                name="skills"
+                                label="Kỹ năng yêu cầu"
+                                placeholder="React, Node.js, TypeScript"
+                                hint="Ngăn cách bằng dấu phẩy. Hệ thống dùng danh sách này để chấm độ khớp CV của ứng viên."
+                                value={form.skills}
+                                onChange={handleChange}
+                                required
+                            />
+                            <Textarea
+                                name="description"
+                                label="Mô tả công việc"
+                                placeholder="Công việc hằng ngày, đội ngũ, sản phẩm ứng viên sẽ tham gia…"
+                                value={form.description}
+                                onChange={handleChange}
+                                required
+                            />
+                            <Textarea
+                                name="requirements"
+                                label="Yêu cầu ứng viên"
+                                placeholder="Số năm kinh nghiệm, công nghệ bắt buộc, bằng cấp nếu có…"
+                                value={form.requirements}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                    </fieldset>
+
+                    <div className="flex justify-end gap-3">
+                        <Link
+                            to="/recruiter/jobs"
+                            className="inline-flex items-center justify-center h-11 px-4 rounded-lg border border-border bg-white text-sm font-semibold text-text-main transition-colors hover:bg-surface hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                        >
+                            Hủy bỏ
+                        </Link>
+                        <Button type="submit" isLoading={loading}>
+                            {isEditMode ? 'Lưu thay đổi' : 'Đăng tin'}
+                        </Button>
+                    </div>
+                </form>
+            </div>
         </RecruiterLayout>
     );
 }

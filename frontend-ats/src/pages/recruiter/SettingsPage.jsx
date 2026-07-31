@@ -87,39 +87,48 @@ export function SettingsPage() {
     return (
         <RecruiterLayout>
             <div className="max-w-5xl mx-auto">
-                <div className="mb-8 flex justify-between items-end">
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-extrabold text-text-main">Cài đặt hệ thống</h1>
-                        <p className="text-text-muted mt-1 font-medium">Quản lý thông tin cá nhân, hồ sơ công ty và bảo mật.</p>
-                    </div>
+                <div className="mb-8">
+                    <h1 className="page-title">Hồ sơ công ty</h1>
+                    <p className="page-subtitle">Thông tin ở đây hiển thị cho ứng viên khi họ xem tin tuyển dụng của bạn.</p>
                 </div>
 
+                {/* Vấn đề: emerald-600 trên emerald-50 chỉ đạt 3.58:1 và red-600 trên red-50 đạt 4.41:1 —
+                    cả hai đều trượt AA, mà đây là dòng DUY NHẤT báo hồ sơ công ty đã lưu được hay chưa.
+                    Chúng còn là màu Tailwind gốc, nằm ngoài hệ thống token.
+                    Giải pháp: bước 700 của token ngữ nghĩa (5.21:1 và 5.91:1), cùng bộ class mà
+                    candidate/SettingsPage đã dùng để hai trang settings báo kết quả giống nhau. */}
                 {message.text && (
-                    <div className={`p-4 mb-6 rounded-xl text-sm font-bold animate-in fade-in slide-in-from-top-2 ${message.type === 'success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-red-50 text-red-600 border border-red-200'}`}>
+                    <div className={`p-3 mb-6 rounded-sm text-sm animate-in fade-in border ${message.type === 'success' ? 'border-success-100 bg-success-50 text-success-700' : 'border-danger-100 bg-danger-50 text-danger-700'}`}>
                         {message.text}
                     </div>
                 )}
 
                 <div className="space-y-8">
                     {/* KHỐI 1: HỒ SƠ CÔNG TY VÀ THÔNG TIN CÁ NHÂN */}
-                    <div className="bg-white p-6 sm:p-8 rounded-3xl border border-border shadow-sm space-y-8">
-                        <h3 className="text-xl font-extrabold text-text-main border-b border-border pb-4 flex items-center gap-2">
-                            <Building2 size={24} className="text-primary" /> Hồ sơ công ty & Cá nhân
+                    <div className="bg-surface-raised p-5 sm:p-6 rounded-lg border border-border space-y-6">
+                        <h3 className="text-lg font-bold text-text-main border-b border-border pb-4 flex items-center gap-2">
+                            <Building2 size={18} className="text-text-subtle shrink-0" aria-hidden="true" /> Hồ sơ công ty
                         </h3>
 
-                        <div className="flex flex-col md:flex-row gap-8 items-start">
+                        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
                             {/* Khu vực up Logo */}
-                            <div className="flex flex-col items-center shrink-0">
-                                <div className="relative w-32 h-32 rounded-2xl border-4 border-surface bg-surface overflow-hidden flex items-center justify-center">
+                            <div className="flex flex-col items-center shrink-0 w-full md:w-auto">
+                                {/* Viền 1px thay border-4, bo 8px thay 12px: đây là ô xem trước ảnh, không
+                                    phải lớp nổi. Viền dày 4px làm nó trông như khung ảnh treo tường. */}
+                                <div className="relative w-32 h-32 rounded-lg border border-border bg-surface overflow-hidden flex items-center justify-center">
                                     {avatarPreview ? (
-                                        <img src={avatarPreview} alt="Company Logo" className="w-full h-full object-contain p-2" />
+                                        <img src={avatarPreview} alt="Logo công ty" className="w-full h-full object-contain p-2" />
                                     ) : (
-                                        <Building2 size={48} className="text-text-muted" />
+                                        <Building2 size={32} className="text-text-subtle" aria-hidden="true" />
                                     )}
                                 </div>
                                 <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleImageChange} />
-                                <button onClick={() => fileInputRef.current.click()} className="mt-4 flex items-center gap-2 text-sm font-bold text-primary hover:bg-primary/10 px-4 py-2 rounded-xl transition-colors">
-                                    <Camera size={16} /> Tải Logo lên
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current.click()}
+                                    className="mt-3 inline-flex items-center gap-2 h-9 px-3 text-sm font-semibold text-text-muted border border-border rounded-lg hover:bg-surface hover:text-text-main hover:border-border-strong transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                >
+                                    <Camera size={16} aria-hidden="true" /> Tải logo lên
                                 </button>
                             </div>
 

@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { Button } from '@/ui/Button';
 import { Lock, CheckCircle, AlertCircle } from 'lucide-react';
 import api from '@/api/axios';
 
 export function ChangePasswordForm() {
+    // Vấn đề: ba <label> không có htmlFor và ba <input> không có id, nên click nhãn không focus
+    // vào ô, và screen reader đọc ra ba ô mật khẩu không tên — người dùng không biết ô nào là
+    // "mật khẩu hiện tại", ô nào là "mật khẩu mới".
+    // Giải pháp: useId sinh id ổn định qua các lần render, cùng cách src/ui/Input.jsx đang dùng.
+    // Cần prefix riêng cho từng ô vì form này xuất hiện ở cả trang settings của admin lẫn HR.
+    const fieldId = useId();
+    const currentId = `${fieldId}-current`;
+    const newId = `${fieldId}-new`;
+    const confirmId = `${fieldId}-confirm`;
     const [passwords, setPasswords] = useState({
         currentPassword: '',
         newPassword: '',
@@ -45,54 +54,65 @@ export function ChangePasswordForm() {
         }
     };
 
+    // Card tĩnh: viền 1px, bo 8px, không shadow.
     return (
-        <div className="bg-white rounded-3xl p-8 border border-border shadow-sm">
+        <div className="bg-surface-raised rounded-lg p-6 sm:p-8 border border-border">
             <h3 className="text-xl font-bold text-text-main mb-6 border-b border-border pb-4 flex items-center gap-2">
                 <Lock size={20} className="text-primary" /> Bảo mật & Mật khẩu
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-4 max-w-lg">
                 <div>
-                    <label className="block text-sm font-bold mb-2">Mật khẩu hiện tại</label>
+                    <label htmlFor={currentId} className="block text-sm font-semibold text-text-main mb-1.5">Mật khẩu hiện tại</label>
                     <input
+                        id={currentId}
                         type="password"
                         name="currentPassword"
                         value={passwords.currentPassword}
                         onChange={handleChange}
                         required
-                        className="w-full px-4 py-3 rounded-xl border border-border outline-none focus:ring-2 focus:ring-primary/20 bg-surface font-medium"
+                        className="w-full h-11 px-3 rounded-sm border border-border bg-white text-sm text-text-main outline-none transition-colors hover:border-border-strong focus:border-primary focus:ring-2 focus:ring-primary/25"
                     />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm font-bold mb-2">Mật khẩu mới</label>
+                        <label htmlFor={newId} className="block text-sm font-semibold text-text-main mb-1.5">Mật khẩu mới</label>
                         <input
+                            id={newId}
                             type="password"
                             name="newPassword"
                             value={passwords.newPassword}
                             onChange={handleChange}
                             required
-                            className="w-full px-4 py-3 rounded-xl border border-border outline-none focus:ring-2 focus:ring-primary/20 bg-surface font-medium"
+                            className="w-full h-11 px-3 rounded-sm border border-border bg-white text-sm text-text-main outline-none transition-colors hover:border-border-strong focus:border-primary focus:ring-2 focus:ring-primary/25"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold mb-2">Xác nhận mật khẩu</label>
+                        <label htmlFor={confirmId} className="block text-sm font-semibold text-text-main mb-1.5">Xác nhận mật khẩu</label>
                         <input
+                            id={confirmId}
                             type="password"
                             name="confirmPassword"
                             value={passwords.confirmPassword}
                             onChange={handleChange}
                             required
-                            className="w-full px-4 py-3 rounded-xl border border-border outline-none focus:ring-2 focus:ring-primary/20 bg-surface font-medium"
+                            className="w-full h-11 px-3 rounded-sm border border-border bg-white text-sm text-text-main outline-none transition-colors hover:border-border-strong focus:border-primary focus:ring-2 focus:ring-primary/25"
                         />
                     </div>
                 </div>
 
+                {/* role="alert": đổi mật khẩu là thao tác không có phản hồi nào khác ngoài dòng chữ này.
+                    Không có role thì screen reader im lặng và người dùng không biết đã đổi được hay chưa. */}
                 {status.msg && (
-                    <div className={`p-4 rounded-xl flex items-center gap-2 text-sm font-bold animate-in fade-in zoom-in ${status.type === 'success' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
-                        }`}>
-                        {status.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                    <div
+                        role="alert"
+                        className={`p-3 rounded-sm border flex items-start gap-2.5 text-sm animate-in fade-in ${status.type === 'success' ? 'border-success-100 bg-success-50 text-success-700' : 'border-danger-100 bg-danger-50 text-danger-700'
+                            }`}
+                    >
+                        {status.type === 'success'
+                            ? <CheckCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                            : <AlertCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />}
                         {status.msg}
                     </div>
                 )}

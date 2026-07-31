@@ -2,8 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { CandidateLayout } from '@/layout/CandidateLayout';
 import { Button } from '@/ui/Button';
+import { SkeletonCard } from '@/ui/Skeleton';
 import api from '@/api/axios';
-import { Search, MapPin, DollarSign, Briefcase, Filter, ChevronDown, Loader2, Building, Clock } from 'lucide-react';
+import { Search, MapPin, Wallet, Clock, Filter, ChevronDown } from 'lucide-react';
+
+// Class dùng chung cho các <select> lọc. Gom lại một chỗ để 6 ô lọc không trôi mỗi ô một kiểu.
+const selectClasses =
+    'form-select w-full h-11 pl-3 pr-9 rounded-sm border border-border bg-white text-sm text-text-main ' +
+    'cursor-pointer transition-colors duration-200 ease-smooth hover:border-border-strong ' +
+    'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25';
 
 export function JobSearchPage() {
     const [jobs, setJobs] = useState([]);
@@ -58,6 +65,8 @@ export function JobSearchPage() {
         fetchJobs();
     };
 
+    const resetFilters = () => setFilters({ keyword: '', location: '', salary: '', experience: '', level: '', type: '' });
+
     // Format tiền tệ cho đẹp trên UI
     const formatSalary = (min, max) => {
         if (!min && !max) return 'Thỏa thuận';
@@ -66,31 +75,51 @@ export function JobSearchPage() {
         return `$${min} - $${max}`;
     };
 
+    // Vấn đề: Empty state chỉ nói "Không tìm thấy kết quả" thì ứng viên không biết nên làm gì —
+    // do hệ thống chưa có tin, hay do chính họ lọc quá hẹp?
+    // Giải pháp: Đếm số điều kiện đang bật để tách hai tình huống và viết hai câu khác nhau.
+    // Đây chỉ là suy ra từ state có sẵn để hiển thị, không can thiệp vào params gửi lên API.
+    const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
     return (
         <CandidateLayout>
-            {/* HERO BAR - Thanh công cụ tìm kiếm chuẩn TopCV */}
-            <div className="bg-primary/5 rounded-3xl p-6 sm:p-8 mb-10 border border-primary/10">
-                <h1 className="text-2xl sm:text-3xl font-black text-text-main mb-6 text-center">
-                    Tìm kiếm công việc mơ ước của bạn
-                </h1>
+            {/* Tiêu đề căn trái, cỡ 28px weight 600 — không phải khối hero nền tint với chữ
+                căn giữa cỡ display. Đây là trang làm việc, không phải trang bán hàng. */}
+            <div>
+                <h1 className="text-2xl font-semibold text-text-main">Tìm việc làm</h1>
+                <p className="text-sm text-text-muted mt-1">
+                    Lọc theo địa điểm, mức lương và kinh nghiệm để thu hẹp danh sách.
+                </p>
+            </div>
 
-                <form onSubmit={handleSearch} className="max-w-5xl mx-auto bg-white rounded-2xl shadow-md border border-border p-2">
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-
-                        {/* 1. Keyword */}
-                        <div className="md:col-span-4 flex items-center px-4 py-2 md:border-r border-border">
-                            <Search className="text-text-muted shrink-0 mr-3" size={20} />
-                            <input
-                                name="keyword" value={filters.keyword} onChange={handleChange}
-                                type="text" placeholder="Tên công việc, vị trí..."
-                                className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-semibold text-text-main placeholder:text-text-muted outline-none"
-                            />
+            {/* Panel lọc: phân vùng bằng viền 1px, không shadow, không nền tint */}
+            <section className="border border-border rounded-lg bg-surface-raised p-4">
+                <form onSubmit={handleSearch} className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                        <div className="md:col-span-5">
+                            <label htmlFor="filter-keyword" className="block text-xs font-semibold text-text-main mb-1.5">
+                                Từ khóa
+                            </label>
+                            <div className="relative">
+                                <Search
+                                    size={16}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-text-subtle pointer-events-none"
+                                    aria-hidden="true"
+                                />
+                                <input
+                                    id="filter-keyword"
+                                    name="keyword" value={filters.keyword} onChange={handleChange}
+                                    type="text" placeholder="Tên vị trí, ví dụ: Frontend Developer"
+                                    className="w-full h-11 pl-9 pr-3 rounded-sm border border-border bg-white text-sm text-text-main placeholder:text-text-subtle transition-colors duration-200 ease-smooth hover:border-border-strong focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+                                />
+                            </div>
                         </div>
 
-                        {/* 2. Địa điểm */}
-                        <div className="md:col-span-3 flex items-center px-4 py-2 md:border-r border-border">
-                            <MapPin className="text-primary shrink-0 mr-3" size={20} />
-                            <select name="location" value={filters.location} onChange={handleChange} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-semibold text-text-main cursor-pointer outline-none appearance-none">
+                        <div className="md:col-span-3">
+                            <label htmlFor="filter-location" className="block text-xs font-semibold text-text-main mb-1.5">
+                                Địa điểm
+                            </label>
+                            <select id="filter-location" name="location" value={filters.location} onChange={handleChange} className={selectClasses}>
                                 <option value="">Tất cả địa điểm</option>
                                 <option value="Hà Nội">Hà Nội</option>
                                 <option value="Hồ Chí Minh">Hồ Chí Minh</option>
@@ -98,11 +127,12 @@ export function JobSearchPage() {
                             </select>
                         </div>
 
-                        {/* 3. Kinh nghiệm */}
-                        <div className="md:col-span-3 flex items-center px-4 py-2">
-                            <Briefcase className="text-warning shrink-0 mr-3" size={20} />
-                            <select name="experience" value={filters.experience} onChange={handleChange} className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-semibold text-text-main cursor-pointer outline-none appearance-none">
-                                <option value="">Tất cả kinh nghiệm</option>
+                        <div className="md:col-span-2">
+                            <label htmlFor="filter-experience" className="block text-xs font-semibold text-text-main mb-1.5">
+                                Kinh nghiệm
+                            </label>
+                            <select id="filter-experience" name="experience" value={filters.experience} onChange={handleChange} className={selectClasses}>
+                                <option value="">Tất cả</option>
                                 <option value="không yêu cầu">Không yêu cầu</option>
                                 <option value="<1 năm">Dưới 1 năm</option>
                                 <option value="1-2 năm">1 - 2 năm</option>
@@ -111,136 +141,182 @@ export function JobSearchPage() {
                             </select>
                         </div>
 
-                        {/* Nút Tìm Kiếm */}
-                        <div className="md:col-span-2 px-2 pb-2 md:pb-0 md:px-0">
-                            <Button type="submit" className="w-full h-full min-h-[44px] rounded-xl text-base shadow-sm">Tìm kiếm</Button>
+                        <div className="md:col-span-2 flex items-end">
+                            <Button type="submit" fullWidth>Tìm kiếm</Button>
                         </div>
                     </div>
+
+                    <div>
+                        <button
+                            type="button"
+                            onClick={() => setShowAdvanced(!showAdvanced)}
+                            aria-expanded={showAdvanced}
+                            className="inline-flex items-center gap-2 text-sm font-medium text-text-muted hover:text-text-main transition-colors cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                        >
+                            <Filter size={15} aria-hidden="true" />
+                            Lọc nâng cao
+                            <ChevronDown size={15} aria-hidden="true" className={`transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {showAdvanced && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-border-subtle animate-in fade-in duration-200">
+                                <div>
+                                    <label htmlFor="filter-salary" className="block text-xs font-semibold text-text-main mb-1.5">Mức lương</label>
+                                    <select id="filter-salary" name="salary" value={filters.salary} onChange={handleChange} className={selectClasses}>
+                                        <option value="">Tất cả mức lương</option>
+                                        <option value="<1000">Dưới $1,000</option>
+                                        <option value="1000-2000">$1,000 - $2,000</option>
+                                        <option value="2000-3000">$2,000 - $3,000</option>
+                                        <option value=">3000">Trên $3,000</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="filter-level" className="block text-xs font-semibold text-text-main mb-1.5">Cấp bậc</label>
+                                    <select id="filter-level" name="level" value={filters.level} onChange={handleChange} className={selectClasses}>
+                                        <option value="">Tất cả cấp bậc</option>
+                                        <option value="intern">Thực tập sinh</option>
+                                        <option value="fresher">Fresher</option>
+                                        <option value="junior">Junior</option>
+                                        <option value="mid">Middle</option>
+                                        <option value="senior">Senior</option>
+                                        <option value="lead">Giám đốc / Lead</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label htmlFor="filter-type" className="block text-xs font-semibold text-text-main mb-1.5">Hình thức</label>
+                                    <select id="filter-type" name="type" value={filters.type} onChange={handleChange} className={selectClasses}>
+                                        <option value="">Tất cả hình thức</option>
+                                        <option value="full-time">Toàn thời gian</option>
+                                        <option value="part-time">Bán thời gian</option>
+                                        <option value="remote">Remote</option>
+                                        <option value="contract">Hợp đồng</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </form>
+            </section>
 
-                {/* Bộ lọc nâng cao */}
-                <div className="max-w-5xl mx-auto mt-4">
-                    <button
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                        className="flex items-center gap-2 text-sm font-bold text-primary hover:text-primary-hover transition-colors"
-                    >
-                        <Filter size={16} /> Lọc nâng cao <ChevronDown size={16} className={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {showAdvanced && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4 animate-in fade-in slide-in-from-top-2">
-                            {/* Mức lương */}
-                            <div className="bg-white px-4 py-2.5 rounded-xl border border-border flex items-center">
-                                <DollarSign size={18} className="text-success mr-2 shrink-0" />
-                                <select name="salary" value={filters.salary} onChange={handleChange} className="w-full text-sm font-semibold outline-none appearance-none cursor-pointer">
-                                    <option value="">Tất cả mức lương</option>
-                                    <option value="<1000">Dưới $1,000</option>
-                                    <option value="1000-2000">$1,000 - $2,000</option>
-                                    <option value="2000-3000">$2,000 - $3,000</option>
-                                    <option value=">3000">Trên $3,000</option>
-                                </select>
-                            </div>
-
-                            {/* Cấp bậc */}
-                            <div className="bg-white px-4 py-2.5 rounded-xl border border-border flex items-center">
-                                <select name="level" value={filters.level} onChange={handleChange} className="w-full text-sm font-semibold outline-none appearance-none cursor-pointer">
-                                    <option value="">Tất cả cấp bậc</option>
-                                    <option value="intern">Thực tập sinh</option>
-                                    <option value="fresher">Fresher</option>
-                                    <option value="junior">Junior</option>
-                                    <option value="mid">Middle</option>
-                                    <option value="senior">Senior</option>
-                                    <option value="lead">Giám đốc / Lead</option>
-                                </select>
-                            </div>
-                            {/* Hình thức làm việc */}
-                            <div className="bg-white px-4 py-2.5 rounded-xl border border-border flex items-center">
-                                <select name="type" value={filters.type} onChange={handleChange} className="w-full text-sm font-semibold outline-none appearance-none cursor-pointer">
-                                    <option value="">Tất cả hình thức</option>
-                                    <option value="full-time">Toàn thời gian</option>
-                                    <option value="part-time">Bán thời gian</option>
-                                    <option value="remote">Remote</option>
-                                    <option value="contract">Hợp đồng</option>
-                                </select>
-                            </div>
-                        </div>
+            {/* Số kết quả dùng aria-live để screen reader biết danh sách vừa đổi sau khi bấm Tìm kiếm */}
+            <div className="flex items-end justify-between gap-4">
+                <p className="text-sm text-text-muted" aria-live="polite">
+                    {loading ? 'Đang tải danh sách…' : (
+                        <>
+                            <span className="font-semibold text-text-main">{jobs.length}</span> vị trí đang tuyển
+                            {activeFilterCount > 0 && ` · ${activeFilterCount} điều kiện lọc`}
+                        </>
                     )}
-                </div>
-            </div>
-
-            {/* DANH SÁCH CÔNG VIỆC */}
-            <div className="mb-6 flex justify-between items-end">
-                <h2 className="text-xl font-extrabold text-text-main">
-                    Tìm thấy <span className="text-primary">{jobs.length}</span> việc làm phù hợp
-                </h2>
+                </p>
+                {activeFilterCount > 0 && !loading && (
+                    <Button variant="ghost" size="sm" onClick={resetFilters}>Xóa bộ lọc</Button>
+                )}
             </div>
 
             {loading ? (
-                <div className="flex flex-col items-center justify-center p-20">
-                    <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                    <span className="font-semibold text-text-muted">Đang quét dữ liệu...</span>
+                // Skeleton giữ đúng khung 4 card sắp hiện, thay cho spinner giữa màn hình:
+                // danh sách không "nhảy dựng" khi data về và ứng viên thấy ngay sắp có gì.
+                <div className="space-y-3" aria-busy="true" aria-label="Đang tải danh sách việc làm">
+                    {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
             ) : jobs.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-border p-16 text-center shadow-sm">
-                    <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Search className="w-10 h-10 text-text-muted opacity-50" />
-                    </div>
-                    <h3 className="text-xl font-bold text-text-main mb-2">Không tìm thấy kết quả</h3>
-                    <p className="text-text-muted font-medium">Thử thay đổi từ khóa hoặc mở rộng bộ lọc xem sao nhé.</p>
-                    <Button variant="outline" className="mt-6" onClick={() => setFilters({ keyword: '', location: '', salary: '', experience: '', level: '', type: '' })}>
-                        Xóa tất cả bộ lọc
-                    </Button>
+                // Hai câu khác nhau cho hai tình huống khác nhau — ứng viên cần biết lỗi ở phía nào.
+                <div className="border border-border rounded-lg bg-surface-raised p-10 max-w-xl">
+                    {activeFilterCount > 0 ? (
+                        <>
+                            <h2 className="text-base font-semibold text-text-main">
+                                Không có vị trí nào khớp với {activeFilterCount} điều kiện bạn đang chọn
+                            </h2>
+                            <p className="text-sm text-text-muted mt-2">
+                                Thử bỏ bớt một điều kiện — mức lương và kinh nghiệm là hai bộ lọc thu hẹp kết quả nhiều nhất.
+                            </p>
+                            <Button variant="outline" size="sm" className="mt-5" onClick={resetFilters}>
+                                Xóa tất cả bộ lọc
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <h2 className="text-base font-semibold text-text-main">
+                                Hiện chưa có tin tuyển dụng nào đang mở
+                            </h2>
+                            <p className="text-sm text-text-muted mt-2">
+                                Các nhà tuyển dụng chưa đăng tin mới. Bạn có thể quay lại sau, hoặc hoàn thiện hồ sơ và CV
+                                trước để nộp được ngay khi có vị trí phù hợp.
+                            </p>
+                            <Link
+                                to="/candidate/settings"
+                                className="inline-flex items-center justify-center h-9 px-3 mt-5 rounded-lg border border-border bg-white text-sm font-semibold text-text-main transition-colors hover:bg-surface hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                            >
+                                Hoàn thiện hồ sơ
+                            </Link>
+                        </>
+                    )}
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {/* Inline Job Card để đảm bảo an toàn tuyệt đối, không bị crash do thiếu Import */}
+                // Danh sách một cột thay cho lưới 3 cột đều nhau: mắt quét dọc một trục nhanh hơn
+                // quét zigzag, và tên vị trí dài không bị cắt giữa chữ như trong ô lưới hẹp.
+                <ul className="space-y-3">
                     {jobs.map((job) => (
-                        <Link key={job._id} to={`/jobs/${job._id}`} className="block group">
-                            <div className="bg-white border border-border rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-primary/50 transition-all h-full flex flex-col relative overflow-hidden">
-                                {job.isFeatured && (
-                                    <div className="absolute top-0 right-0 bg-warning text-white text-[10px] font-black uppercase px-3 py-1 rounded-bl-xl tracking-wider">
-                                        Hot
-                                    </div>
-                                )}
-
-                                <div className="flex gap-4 mb-4">
-                                    <div className="w-14 h-14 bg-surface rounded-xl border border-border flex items-center justify-center shrink-0 p-2">
+                        <li key={job._id}>
+                            <Link
+                                to={`/jobs/${job._id}`}
+                                onKeyDown={(e) => {
+                                    if (e.key === ' ') {
+                                        e.preventDefault();
+                                        e.currentTarget.click();
+                                    }
+                                }}
+                                className="group block border border-border rounded-lg bg-surface-raised p-4 transition-colors duration-200 ease-smooth hover:border-border-strong hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-sm border border-border bg-surface flex items-center justify-center shrink-0 overflow-hidden">
                                         <img
-                                            src={job.recruiter?.companyLogo || `https://ui-avatars.com/api/?name=${job.recruiter?.companyName || 'C'}&background=e0f2fe&color=0284c7`}
-                                            alt="Logo"
-                                            className="w-full h-full object-contain rounded-lg"
+                                            src={job.recruiter?.companyLogo || `https://ui-avatars.com/api/?name=${job.recruiter?.companyName || 'C'}&background=f1f5f9&color=475569`}
+                                            alt=""
+                                            className="w-full h-full object-contain"
                                         />
                                     </div>
-                                    <div>
-                                        <h3 className="font-bold text-text-main leading-tight mb-1 group-hover:text-primary transition-colors line-clamp-2">
+
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-base font-semibold text-text-main truncate group-hover:text-primary transition-colors">
                                             {job.title}
                                         </h3>
-                                        <div className="text-sm font-medium text-text-muted truncate">
+                                        <p className="text-sm text-text-muted truncate mt-0.5">
                                             {job.recruiter?.companyName || 'Công ty ẩn danh'}
-                                        </div>
+                                        </p>
                                     </div>
+
+                                    {job.isFeatured && (
+                                        // "Tin nổi bật" là trạng thái thật của tin, không phải nhãn trang trí.
+                                        // Dùng chip viền nhạt thay vì nền warning đặc chữ trắng in hoa.
+                                        <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-sm border border-warning-100 bg-warning-50 text-xs font-medium text-warning-700 shrink-0">
+                                            Tin nổi bật
+                                        </span>
+                                    )}
                                 </div>
 
-                                <div className="flex flex-wrap gap-2 mt-auto pt-4 border-t border-border">
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface text-xs font-semibold text-text-muted">
-                                        <DollarSign size={14} className="text-success" />
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border text-xs font-medium text-text-muted">
+                                        <Wallet size={13} className="text-text-subtle shrink-0" aria-hidden="true" />
                                         {formatSalary(job.salaryMin, job.salaryMax)}
                                     </span>
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface text-xs font-semibold text-text-muted">
-                                        <MapPin size={14} className="text-primary" />
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border text-xs font-medium text-text-muted">
+                                        <MapPin size={13} className="text-text-subtle shrink-0" aria-hidden="true" />
                                         {job.location || 'Toàn quốc'}
                                     </span>
                                     {job.experience && (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-surface text-xs font-semibold text-text-muted">
-                                            <Briefcase size={14} className="text-warning" />
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border text-xs font-medium text-text-muted">
+                                            <Clock size={13} className="text-text-subtle shrink-0" aria-hidden="true" />
                                             {job.experience}
                                         </span>
                                     )}
                                 </div>
-                            </div>
-                        </Link>
+                            </Link>
+                        </li>
                     ))}
-                </div>
+                </ul>
             )}
         </CandidateLayout>
     );

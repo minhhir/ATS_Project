@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
 import { AuthLayout } from '@/layout/AuthLayout';
 import { useAuth } from '@/context/AuthContext';
-import { AlertCircle } from 'lucide-react';
 
 export function RegisterPage() {
     const navigate = useNavigate();
@@ -46,52 +46,88 @@ export function RegisterPage() {
         }
     };
 
+    const roles = [
+        { value: 'candidate', label: 'Tôi tìm việc' },
+        { value: 'recruiter', label: 'Tôi tuyển người' },
+    ];
+
     return (
         <AuthLayout>
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-8">
                 <div>
-                    <h1 className="text-3xl font-extrabold tracking-tight text-text-main">Tạo tài khoản</h1>
-                    <p className="text-text-muted mt-2 text-sm font-medium">Tham gia nền tảng tuyển dụng thông minh</p>
+                    <h1 className="text-2xl font-semibold text-text-main">Tạo tài khoản</h1>
+                    {/* Câu này giải thích lý do có nút chọn vai trò ngay bên dưới, thay cho một câu
+                        quảng cáo chung chung — người dùng cần biết chọn sai thì vào sai khu vực. */}
+                    <p className="text-sm text-text-muted mt-2">
+                        Ứng viên và nhà tuyển dụng dùng hai khu vực khác nhau, nên hãy chọn đúng vai trò.
+                    </p>
                 </div>
 
-                {error && (
-                    <div className="flex items-center gap-2 p-3 bg-danger/10 border border-danger/20 text-danger rounded-lg text-sm font-medium">
-                        <AlertCircle size={18} /><span>{error}</span>
-                    </div>
-                )}
-
-                <form className="space-y-5" onSubmit={handleSubmit}>
-                    {/* Role Toggle */}
-                    <div className="flex p-1 bg-surface rounded-xl border border-border">
-                        <button type="button" onClick={() => setRole('candidate')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${form.role === 'candidate' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-main'}`}>
-                            Ứng viên
-                        </button>
-                        <button type="button" onClick={() => setRole('recruiter')} className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${form.role === 'recruiter' ? 'bg-white text-primary shadow-sm' : 'text-text-muted hover:text-text-main'}`}>
-                            Nhà tuyển dụng
-                        </button>
-                    </div>
-
-                    <Input name="name" label="Họ và tên" placeholder="Nguyễn Văn A" value={form.name} onChange={handleChange} required />
-                    <Input name="email" label="Địa chỉ Email" type="email" placeholder="name@company.com" value={form.email} onChange={handleChange} required />
-
-                    {form.role === 'recruiter' && (
-                        <div className="animate-in fade-in zoom-in-95 duration-300">
-                            <Input name="companyName" label="Tên công ty" placeholder="Công ty TNHH ABC" value={form.companyName} onChange={handleChange} required />
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                    {error && (
+                        <div
+                            role="alert"
+                            className="flex items-start gap-2.5 p-3 rounded-sm border border-danger-100 bg-danger-50 text-sm text-danger-700"
+                        >
+                            <AlertCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                            <span>{error}</span>
                         </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Input name="password" label="Mật khẩu" type="password" placeholder="••••••••" value={form.password} onChange={handleChange} required />
-                        <Input name="confirmPassword" label="Xác nhận lại" type="password" placeholder="••••••••" value={form.confirmPassword} onChange={handleChange} required />
+                    {/* Vấn đề: Hai nút chọn vai trò trước đây là <button> trơn — screen reader chỉ đọc
+                        được nhãn, không biết cái nào đang được chọn.
+                        Giải pháp: aria-pressed cho mẫu nút bật/tắt. Không dùng role="radio" vì radio
+                        buộc phải tự xử lý điều hướng bằng phím mũi tên mới đúng chuẩn.
+                        Trạng thái chọn phân biệt bằng NỀN TRẮNG + VIỀN, không bằng shadow. */}
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-surface-sunken rounded-lg border border-border">
+                        {roles.map(({ value, label }) => {
+                            const selected = form.role === value;
+                            return (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setRole(value)}
+                                    aria-pressed={selected}
+                                    className={`h-9 rounded-sm text-sm transition-colors duration-200 ease-smooth cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                                        selected
+                                            ? 'bg-white border border-border-strong text-text-main font-semibold'
+                                            : 'text-text-muted font-medium hover:text-text-main'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    <Button type="submit" className="w-full mt-2" isLoading={loading}>
+                    <Input name="name" label="Họ và tên" placeholder="Nguyễn Văn A" value={form.name} onChange={handleChange} autoComplete="name" required />
+                    <Input name="email" label="Email" type="email" placeholder="name@company.com" value={form.email} onChange={handleChange} autoComplete="email" required />
+
+                    {form.role === 'recruiter' && (
+                        // Fade 200ms: chuyển động ở đây có nghĩa — nó cho biết một trường vừa được
+                        // thêm vào do lựa chọn phía trên, không phải trang tự nhảy.
+                        <div className="animate-in fade-in duration-200">
+                            <Input name="companyName" label="Tên công ty" placeholder="Công ty TNHH ABC" value={form.companyName} onChange={handleChange} autoComplete="organization" required />
+                        </div>
+                    )}
+
+                    {/* Một cột trên mobile: hai ô mật khẩu cạnh nhau ở 375px thì nhãn "Xác nhận lại"
+                        bị ngắt dòng và ô nhập chỉ còn khoảng 150px. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Input name="password" label="Mật khẩu" type="password" value={form.password} onChange={handleChange} autoComplete="new-password" required />
+                        <Input name="confirmPassword" label="Nhập lại mật khẩu" type="password" value={form.confirmPassword} onChange={handleChange} autoComplete="new-password" required />
+                    </div>
+
+                    <Button type="submit" fullWidth isLoading={loading} className="mt-2">
                         Tạo tài khoản
                     </Button>
                 </form>
 
-                <p className="text-center text-sm font-medium text-text-muted pt-4">
-                    Đã có tài khoản? <Link to="/login" className="text-primary font-bold hover:underline">Đăng nhập</Link>
+                <p className="text-sm text-text-muted pt-6 border-t border-border">
+                    Đã có tài khoản?{' '}
+                    <Link to="/login" className="font-medium text-primary hover:text-primary-hover hover:underline rounded-sm">
+                        Đăng nhập
+                    </Link>
                 </p>
             </div>
         </AuthLayout>

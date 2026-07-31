@@ -3,9 +3,20 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { CandidateLayout } from '@/layout/CandidateLayout';
 import { RecruiterLayout } from '@/layout/RecruiterLayout';
 import { Button } from '@/ui/Button';
-import { MapPin, DollarSign, Clock, Building, ChevronLeft, Send, User, X, UploadCloud, CheckCircle, Loader2, Edit, Users } from 'lucide-react';
+import { Textarea } from '@/ui/Textarea';
+import { Skeleton, SkeletonText } from '@/ui/Skeleton';
+import { MapPin, ChevronLeft, Send, X, UploadCloud, CheckCircle2, AlertCircle, Edit, Users } from 'lucide-react';
 import api from '@/api/axios';
 import { useAuth } from '@/context/AuthContext';
+
+// Link mang bộ class của nút, dùng thay cho <Link><Button/></Link> — lồng <button> trong <a>
+// là HTML không hợp lệ và screen reader đọc ra hai phần tử tương tác chồng nhau.
+const linkButtonBase =
+    'inline-flex items-center justify-center gap-2 w-full h-11 px-4 rounded-lg text-sm font-semibold ' +
+    'transition-colors duration-200 ease-smooth focus-visible:outline-none focus-visible:ring-2 ' +
+    'focus-visible:ring-primary/40 focus-visible:ring-offset-2';
+const linkButtonPrimary = `${linkButtonBase} bg-primary text-white hover:bg-primary-hover`;
+const linkButtonOutline = `${linkButtonBase} border border-border bg-white text-text-main hover:bg-surface hover:border-border-strong`;
 
 export function JobDetailPage() {
     const { id } = useParams();
@@ -30,6 +41,9 @@ export function JobDetailPage() {
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
     const fileInputRef = useRef(null);
+    const modalRef = useRef(null);
+
+    const modalOpen = !isRecruiter && showModal;
 
     // GỌI API LẤY DỮ LIỆU JOB THẬT THEO ID
     useEffect(() => {
@@ -45,6 +59,64 @@ export function JobDetailPage() {
         };
         fetchJobDetail();
     }, [id]);
+
+    // Vấn đề: Modal có aria-modal="true" nhưng focus vẫn ở ngoài nó — screen reader coi phần còn
+    // lại của trang là ẩn trong khi bàn phím vẫn Tab ra được các nút phía sau lớp phủ. Người dùng
+    // bàn phím bị "mất" con trỏ và không biết mình đang ở đâu.
+    // Giải pháp: Khi mở, đưa focus vào phần tử đầu tiên trong modal và giữ Tab quay vòng bên trong;
+    // khi đóng, trả focus về đúng nút vừa bấm để không mất mạch thao tác.
+    // Effect này CHỈ phụ thuộc modalOpen — nếu thêm isApplying vào deps thì mỗi lần submit focus
+    // sẽ bị kéo về phần tử đầu giữa lúc user đang chờ.
+    useEffect(() => {
+        if (!modalOpen) return;
+
+        const previouslyFocused = document.activeElement;
+        const node = modalRef.current;
+
+        const getFocusable = () => node
+            ? Array.from(node.querySelectorAll(
+                'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            ))
+            : [];
+
+        getFocusable()[0]?.focus();
+
+        const handleTab = (e) => {
+            if (e.key !== 'Tab') return;
+            const items = getFocusable();
+            if (items.length === 0) return;
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        };
+
+        document.addEventListener('keydown', handleTab);
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        return () => {
+            document.removeEventListener('keydown', handleTab);
+            document.body.style.overflow = previousOverflow;
+            if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
+        };
+    }, [modalOpen]);
+
+    // Escape tách riêng khỏi effect focus: nó cần đọc isApplying mới nhất (không cho đóng giữa lúc
+    // đang upload CV, đúng như hành vi của nút X), nhưng không được kéo focus mỗi lần isApplying đổi.
+    useEffect(() => {
+        if (!modalOpen) return;
+        const handleEscape = (e) => {
+            if (e.key === 'Escape' && !isApplying) setShowModal(false);
+        };
+        document.addEventListener('keydown', handleEscape);
+        return () => document.removeEventListener('keydown', handleEscape);
+    }, [modalOpen, isApplying]);
 
     // Format lương USD
     const formatSalary = (min, max) => {
@@ -87,9 +159,21 @@ export function JobDetailPage() {
     if (pageLoading) {
         return (
             <Layout>
-                <div className="flex flex-col items-center justify-center min-h-[50vh]">
-                    <Loader2 className="w-10 h-10 animate-spin text-primary mb-4" />
-                    <span className="font-semibold text-text-muted">Đang tải thông tin...</span>
+                {/* Skeleton dựng đúng khung 2 cột sắp hiện, thay spinner giữa màn hình */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" aria-busy="true" aria-label="Đang tải thông tin việc làm">
+                    <div className="lg:col-span-2 space-y-3">
+                        <div className="border border-border rounded-lg p-5 space-y-3">
+                            <Skeleton className="h-6 w-2/3" />
+                            <Skeleton className="h-4 w-1/3" />
+                        </div>
+                        <div className="border border-border rounded-lg p-5">
+                            <SkeletonText lines={6} />
+                        </div>
+                    </div>
+                    <div className="border border-border rounded-lg p-5 space-y-3 h-fit">
+                        <Skeleton className="h-11 w-full" />
+                        <SkeletonText lines={2} />
+                    </div>
                 </div>
             </Layout>
         );
@@ -98,10 +182,12 @@ export function JobDetailPage() {
     if (!job) {
         return (
             <Layout>
-                <div className="text-center py-20">
-                    <h2 className="text-2xl font-bold text-text-main mb-2">Không tìm thấy công việc!</h2>
-                    <p className="text-text-muted mb-6">Công việc này có thể đã bị xóa hoặc hết hạn.</p>
-                    <Button onClick={() => navigate(-1)}>
+                <div className="border border-border rounded-lg bg-surface-raised p-10 max-w-xl">
+                    <h1 className="text-base font-semibold text-text-main">Không tìm thấy tin tuyển dụng này</h1>
+                    <p className="text-sm text-text-muted mt-2">
+                        Tin có thể đã được nhà tuyển dụng đóng lại hoặc đã hết hạn nhận hồ sơ.
+                    </p>
+                    <Button variant="outline" size="sm" className="mt-5" onClick={() => navigate(-1)}>
                         Quay lại
                     </Button>
                 </div>
@@ -111,67 +197,65 @@ export function JobDetailPage() {
 
     return (
         <Layout>
-            <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-text-muted hover:text-primary font-bold mb-6 transition-colors">
-                <ChevronLeft size={20} /> Quay lại
+            <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-text-muted hover:text-text-main transition-colors cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            >
+                <ChevronLeft size={16} aria-hidden="true" /> Quay lại
             </button>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative z-0">
-                {/* Main Content */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white rounded-3xl p-8 border border-border shadow-sm">
-                        <h1 className="text-3xl font-black text-text-main mb-4">{job.title}</h1>
-                        <div className="flex flex-wrap items-center gap-6 mb-6">
-                            <div className="flex items-center gap-2 text-text-muted font-medium">
-                                <Building size={18} className="text-primary" />
-                                <span className="text-lg">{job.recruiter?.companyName || 'Công ty ẩn danh'}</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-text-muted font-medium">
-                                <MapPin size={18} className="text-primary" />
-                                <span>{job.location}</span>
-                            </div>
+            {/* Bất đối xứng 2:1 phục vụ thứ tự đọc: ứng viên đọc mô tả trước, cột hành động bên phải
+                đứng yên (sticky) để nút Ứng tuyển luôn trong tầm mắt khi cuộn nội dung dài. */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-3">
+                    <div className="border border-border rounded-lg bg-surface-raised p-5">
+                        <h1 className="text-2xl font-semibold text-text-main">{job.title}</h1>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-text-muted">
+                            <span>{job.recruiter?.companyName || 'Công ty ẩn danh'}</span>
+                            <span className="inline-flex items-center gap-1.5">
+                                <MapPin size={14} className="text-text-subtle" aria-hidden="true" />
+                                {job.location}
+                            </span>
                         </div>
 
-                        <div className="flex flex-wrap gap-4 py-6 border-y border-border">
-                            <div className="flex-1 min-w-[120px]">
-                                <div className="text-sm text-text-muted font-semibold mb-1">Mức lương</div>
-                                <div className="text-success font-bold flex items-center gap-1">
-                                    <DollarSign size={18} />{formatSalary(job.salaryMin, job.salaryMax)}
-                                </div>
+                        {/* Ba số liệu chính dùng <dl>: nhãn nhỏ màu nhạt, giá trị đậm màu chính —
+                            phân cấp bằng cân nặng và màu, không bằng cỡ chữ. */}
+                        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5 pt-5 border-t border-border-subtle">
+                            <div>
+                                <dt className="text-xs text-text-subtle">Mức lương</dt>
+                                <dd className="text-sm font-semibold text-text-main mt-0.5">{formatSalary(job.salaryMin, job.salaryMax)}</dd>
                             </div>
-                            <div className="flex-1 min-w-[120px]">
-                                <div className="text-sm text-text-muted font-semibold mb-1">Hình thức</div>
-                                <div className="text-text-main font-bold flex items-center gap-1">
-                                    <Clock size={18} />{job.type}
-                                </div>
+                            <div>
+                                <dt className="text-xs text-text-subtle">Hình thức</dt>
+                                <dd className="text-sm font-semibold text-text-main mt-0.5">{job.type}</dd>
                             </div>
-                            <div className="flex-1 min-w-[120px]">
-                                <div className="text-sm text-text-muted font-semibold mb-1">Cấp bậc</div>
-                                <div className="text-text-main font-bold flex items-center gap-1">
-                                    <User size={18} />{job.level}
-                                </div>
+                            <div>
+                                <dt className="text-xs text-text-subtle">Cấp bậc</dt>
+                                <dd className="text-sm font-semibold text-text-main mt-0.5">{job.level}</dd>
                             </div>
-                        </div>
+                        </dl>
                     </div>
 
-                    <div className="bg-white rounded-3xl p-8 border border-border shadow-sm space-y-8">
+                    <div className="border border-border rounded-lg bg-surface-raised p-5 space-y-6">
                         <section>
-                            <h3 className="text-xl font-extrabold text-text-main mb-4">Mô tả công việc</h3>
-                            <div className="text-text-muted leading-relaxed font-medium whitespace-pre-wrap">
+                            <h2 className="text-base font-semibold text-text-main mb-2">Mô tả công việc</h2>
+                            <div className="text-sm text-text-muted whitespace-pre-wrap">
                                 {job.description}
                             </div>
                         </section>
                         <section>
-                            <h3 className="text-xl font-extrabold text-text-main mb-4">Yêu cầu ứng viên</h3>
-                            <div className="text-text-muted leading-relaxed font-medium whitespace-pre-wrap">
+                            <h2 className="text-base font-semibold text-text-main mb-2">Yêu cầu ứng viên</h2>
+                            <div className="text-sm text-text-muted whitespace-pre-wrap">
                                 {job.requirements}
                             </div>
                         </section>
                         {job.skills && job.skills.length > 0 && (
                             <section>
-                                <h3 className="text-xl font-extrabold text-text-main mb-4">Kỹ năng chuyên môn</h3>
-                                <div className="flex flex-wrap gap-2">
+                                <h2 className="text-base font-semibold text-text-main mb-2">Kỹ năng yêu cầu</h2>
+                                <div className="flex flex-wrap gap-1.5">
                                     {job.skills.map((skill, idx) => (
-                                        <span key={idx} className="px-3 py-1.5 bg-surface border border-border rounded-lg text-sm font-bold text-text-muted">
+                                        <span key={idx} className="px-2 py-0.5 rounded-sm border border-border text-xs font-medium text-text-muted">
                                             {skill}
                                         </span>
                                     ))}
@@ -182,57 +266,57 @@ export function JobDetailPage() {
                 </div>
 
                 {/* Sidebar */}
-                <div className="space-y-6">
-                    <div className="bg-white rounded-3xl p-6 border border-border shadow-sm sticky top-24">
-
+                <div>
+                    <div className="border border-border rounded-lg bg-surface-raised p-5 sticky top-20">
                         {isRecruiter ? (
                             <>
-                                <h3 className="text-lg font-extrabold text-text-main mb-2">Công cụ quản lý</h3>
-                                <p className="text-text-muted text-sm font-medium mb-6">Bạn đang xem tin dưới góc nhìn của Nhà tuyển dụng.</p>
+                                <h2 className="text-base font-semibold text-text-main">Công cụ quản lý</h2>
+                                <p className="text-sm text-text-muted mt-1 mb-4">
+                                    Bạn đang xem tin này dưới góc nhìn nhà tuyển dụng.
+                                </p>
 
-                                <Link to={`/recruiter/jobs/${id}/edit`}>
-                                    <Button className="w-full py-3.5 text-base rounded-xl mb-3 bg-surface text-text-main hover:bg-border border border-border transition-colors">
-                                        <Edit size={18} className="mr-2 inline" /> Chỉnh sửa tin này
-                                    </Button>
-                                </Link>
-
-                                <Link to={`/recruiter/candidates?jobId=${id}`}>
-                                    <Button className="w-full py-3.5 text-base rounded-xl">
-                                        <Users size={18} className="mr-2 inline" /> Xem ứng viên ({job.applicantCount || 0})
-                                    </Button>
-                                </Link>
+                                <div className="space-y-2">
+                                    <Link to={`/recruiter/candidates?jobId=${id}`} className={linkButtonPrimary}>
+                                        <Users size={16} aria-hidden="true" /> Xem ứng viên ({job.applicantCount || 0})
+                                    </Link>
+                                    <Link to={`/recruiter/jobs/${id}/edit`} className={linkButtonOutline}>
+                                        <Edit size={16} aria-hidden="true" /> Chỉnh sửa tin
+                                    </Link>
+                                </div>
                             </>
                         ) : (
                             <>
-                                <h3 className="text-lg font-extrabold text-text-main mb-2">Sẵn sàng gia nhập?</h3>
-                                <p className="text-text-muted text-sm font-medium mb-6">Gửi CV của bạn ngay hôm nay để không bỏ lỡ cơ hội này.</p>
-                                <Button onClick={() => setShowModal(true)} className="w-full py-3.5 text-base rounded-xl">
-                                    <Send size={18} className="mr-2 inline" /> Ứng tuyển ngay
+                                <h2 className="text-base font-semibold text-text-main">Nộp hồ sơ</h2>
+                                <p className="text-sm text-text-muted mt-1 mb-4">
+                                    Bạn cần một file CV dạng PDF. Thư giới thiệu không bắt buộc.
+                                </p>
+                                <Button onClick={() => setShowModal(true)} fullWidth>
+                                    <Send size={16} aria-hidden="true" /> Ứng tuyển
                                 </Button>
                             </>
                         )}
 
-                        <div className="mt-6 pt-6 border-t border-border">
-                            <h4 className="font-bold text-text-main mb-4">Về công ty</h4>
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-12 h-12 bg-surface rounded-xl overflow-hidden border border-border flex items-center justify-center shrink-0">
+                        <div className="mt-5 pt-5 border-t border-border-subtle">
+                            <h3 className="text-sm font-semibold text-text-main mb-3">Về công ty</h3>
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-10 h-10 rounded-sm border border-border bg-surface flex items-center justify-center shrink-0 overflow-hidden">
                                     <img
-                                        src={job.recruiter?.companyLogo || `https://ui-avatars.com/api/?name=${job.recruiter?.companyName || 'C'}&background=e0f2fe&color=0284c7`}
-                                        alt="Logo"
+                                        src={job.recruiter?.companyLogo || `https://ui-avatars.com/api/?name=${job.recruiter?.companyName || 'C'}&background=f1f5f9&color=475569`}
+                                        alt=""
                                         className="w-full h-full object-contain"
                                     />
                                 </div>
-                                <div>
-                                    <div className="font-bold text-text-main line-clamp-1">{job.recruiter?.companyName || 'Công ty ẩn danh'}</div>
+                                <div className="min-w-0">
+                                    <div className="text-sm font-medium text-text-main truncate">{job.recruiter?.companyName || 'Công ty ẩn danh'}</div>
                                     {job.recruiter?.companyWebsite && (
-                                        <a href={job.recruiter.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline font-medium">
+                                        <a href={job.recruiter.companyWebsite} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline rounded-sm">
                                             Website công ty
                                         </a>
                                     )}
                                 </div>
                             </div>
                             {job.recruiter?.companyDesc && (
-                                <p className="text-sm text-text-muted font-medium line-clamp-3">
+                                <p className="text-sm text-text-muted mt-3 line-clamp-3">
                                     {job.recruiter.companyDesc}
                                 </p>
                             )}
@@ -243,38 +327,58 @@ export function JobDetailPage() {
 
             {/* Vấn đề: Modal apply là form lớn, render kể cả khi user là HR sẽ tốn DOM và tăng risk crash khi state không khớp role.
                 Giải pháp: Render modal có điều kiện !isRecruiter && showModal để DOM nhẹ và logic rõ ràng theo role. */}
-            {!isRecruiter && showModal && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl w-full max-w-lg p-6 sm:p-8 relative animate-in fade-in zoom-in-95 duration-200">
+            {modalOpen && (
+                <div className="fixed inset-0 bg-neutral-900/50 z-50 flex items-center justify-center p-4">
+                    {/* Modal là lớp nổi thật sự nên đây là một trong hai chỗ duy nhất được dùng shadow;
+                        bo 12px theo bậc "modal" của thang bo góc. */}
+                    <div
+                        ref={modalRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="apply-modal-title"
+                        className="bg-surface-raised border border-border rounded-2xl shadow-xl w-full max-w-lg p-5 sm:p-6 relative animate-in fade-in duration-200"
+                    >
                         <button
+                            type="button"
                             onClick={() => !isApplying && setShowModal(false)}
-                            className="absolute top-6 right-6 text-text-muted hover:text-text-main hover:bg-surface p-1 rounded-lg transition-colors"
+                            aria-label="Đóng"
+                            className="absolute top-4 right-4 p-1.5 rounded-sm text-text-subtle hover:text-text-main hover:bg-surface transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                         >
-                            <X size={24} />
+                            <X size={18} aria-hidden="true" />
                         </button>
 
                         {success ? (
-                            <div className="text-center py-8">
-                                <div className="w-20 h-20 bg-success/10 text-success rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <CheckCircle size={40} />
+                            <div className="py-4" role="status">
+                                <div className="flex items-center gap-2 text-success">
+                                    <CheckCircle2 size={20} aria-hidden="true" />
+                                    <h2 id="apply-modal-title" className="text-base font-semibold text-text-main">Đã nộp hồ sơ</h2>
                                 </div>
-                                <h2 className="text-2xl font-black text-text-main mb-2">Nộp CV thành công!</h2>
-                                <p className="text-text-muted font-medium">Hệ thống đang chuyển hướng sang trang quản lý đơn...</p>
+                                <p className="text-sm text-text-muted mt-2">
+                                    Đơn của bạn đã vào danh sách của nhà tuyển dụng. Đang chuyển sang trang theo dõi đơn…
+                                </p>
                             </div>
                         ) : (
                             <form onSubmit={handleApply}>
-                                <h2 className="text-2xl font-black text-text-main mb-2">Ứng tuyển vị trí này</h2>
-                                <p className="text-text-muted font-medium mb-6 line-clamp-1">{job.title}</p>
+                                <h2 id="apply-modal-title" className="text-base font-semibold text-text-main pr-8">
+                                    Ứng tuyển vị trí này
+                                </h2>
+                                <p className="text-sm text-text-muted mt-1 mb-5 line-clamp-1">{job.title}</p>
 
                                 {error && (
-                                    <div className="p-3 mb-6 bg-danger/10 text-danger border border-danger/20 rounded-xl text-sm font-semibold">
-                                        {error}
+                                    <div
+                                        role="alert"
+                                        className="flex items-start gap-2.5 p-3 mb-5 rounded-sm border border-danger-100 bg-danger-50 text-sm text-danger-700"
+                                    >
+                                        <AlertCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                                        <span>{error}</span>
                                     </div>
                                 )}
 
-                                <div className="space-y-6 mb-8">
+                                <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-bold text-text-main mb-2">CV của bạn (Bắt buộc) <span className="text-danger">*</span></label>
+                                        <span className="block text-sm font-semibold text-text-main mb-2">
+                                            CV của bạn <span className="text-danger">*</span>
+                                        </span>
                                         <input
                                             type="file"
                                             accept=".pdf"
@@ -282,35 +386,44 @@ export function JobDetailPage() {
                                             ref={fileInputRef}
                                             onChange={(e) => setFile(e.target.files[0])}
                                         />
-                                        <div
+                                        {/* Vấn đề: Vùng chọn file là <div onClick> nên không tab tới được —
+                                            và nó lại là trường bắt buộc duy nhất của form này.
+                                            Giải pháp: <button type="button"> để không submit form khi bấm. */}
+                                        <button
+                                            type="button"
                                             onClick={() => fileInputRef.current?.click()}
-                                            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${file ? 'border-primary bg-primary-light/30' : 'border-border hover:border-primary hover:bg-surface'}`}
+                                            className={`w-full border border-dashed rounded-sm p-5 text-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 ${
+                                                file ? 'border-primary bg-primary-50' : 'border-border-strong hover:border-primary hover:bg-surface'
+                                            }`}
                                         >
-                                            <UploadCloud className={`mx-auto mb-3 ${file ? 'text-primary' : 'text-text-muted'}`} size={32} />
+                                            <UploadCloud
+                                                className={`mx-auto mb-2 ${file ? 'text-primary' : 'text-text-subtle'}`}
+                                                size={22}
+                                                aria-hidden="true"
+                                            />
                                             {file ? (
-                                                <div className="font-bold text-primary truncate px-4">{file.name}</div>
+                                                <span className="block text-sm font-semibold text-primary truncate px-4">{file.name}</span>
                                             ) : (
                                                 <>
-                                                    <div className="font-bold text-text-main mb-1">Click để tải lên CV của bạn</div>
-                                                    <div className="text-sm text-text-muted">Chỉ hỗ trợ định dạng PDF (Max 5MB)</div>
+                                                    <span className="block text-sm font-semibold text-text-main">Chọn file CV</span>
+                                                    <span className="block text-xs text-text-muted mt-0.5">PDF, tối đa 5MB</span>
                                                 </>
                                             )}
-                                        </div>
+                                        </button>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-bold text-text-main mb-2">Thư giới thiệu (Không bắt buộc)</label>
-                                        <textarea
-                                            className="w-full px-4 py-3 rounded-xl border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none resize-y min-h-[100px] text-sm font-medium placeholder:text-text-muted"
-                                            placeholder="Ghi chú thêm về kinh nghiệm hoặc lý do bạn phù hợp với công việc này..."
-                                            value={coverLetter}
-                                            onChange={(e) => setCoverLetter(e.target.value)}
-                                        ></textarea>
-                                    </div>
+                                    <Textarea
+                                        label="Thư giới thiệu"
+                                        hint="Không bắt buộc. Nếu viết, hãy nói ngắn vì sao bạn phù hợp với vị trí này."
+                                        placeholder="Ví dụ: Tôi có 3 năm làm React ở sản phẩm có 50 nghìn người dùng…"
+                                        value={coverLetter}
+                                        onChange={(e) => setCoverLetter(e.target.value)}
+                                        className="min-h-[100px]"
+                                    />
                                 </div>
 
-                                <Button type="submit" className="w-full py-3 text-base" isLoading={isApplying}>
-                                    Hoàn tất nộp đơn
+                                <Button type="submit" fullWidth isLoading={isApplying} className="mt-5">
+                                    Nộp hồ sơ
                                 </Button>
                             </form>
                         )}

@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { Input } from '@/ui/Input';
 import { Button } from '@/ui/Button';
 import { AuthLayout } from '@/layout/AuthLayout';
 import api from '@/api/axios';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
+
+// Vấn đề: Trước đây màn thành công dùng <Link><Button/></Link> — lồng <button> trong <a> là HTML
+// không hợp lệ và screen reader đọc ra hai phần tử tương tác chồng nhau.
+// Giải pháp: Link mang trực tiếp bộ class của nút chính. Giữ đúng kích thước/bo góc của Button
+// để không sinh ra một biến thể nút thứ hai ngoài hệ thống.
+const primaryLinkClasses =
+    'inline-flex items-center justify-center w-full h-11 px-4 rounded-lg text-sm font-semibold ' +
+    'bg-primary text-white transition-colors duration-200 ease-smooth hover:bg-primary-hover ' +
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2';
 
 export function ResetPassword() {
     const location = useLocation();
@@ -21,10 +30,22 @@ export function ResetPassword() {
     if (!email || !otp) {
         return (
             <AuthLayout>
-                <div className="text-center space-y-4">
-                    <AlertCircle className="w-16 h-16 text-danger mx-auto" />
-                    <h1 className="text-xl font-bold">Phiên làm việc không hợp lệ</h1>
-                    <Link to="/forgot-password" className="text-primary font-semibold hover:underline block">Quay lại yêu cầu đặt mật khẩu</Link>
+                {/* Icon nhỏ đặt cạnh tiêu đề, không phải khối tròn nền tint cỡ 64px giữa màn hình:
+                    đây là thông báo cần đọc rồi hành động, không phải hình minh hoạ. */}
+                <div className="space-y-8" role="alert">
+                    <div>
+                        <div className="flex items-center gap-2 text-danger">
+                            <AlertCircle size={20} aria-hidden="true" />
+                            <h1 className="text-2xl font-semibold text-text-main">Phiên đã hết hạn</h1>
+                        </div>
+                        <p className="text-sm text-text-muted mt-2">
+                            Mã xác nhận chỉ dùng được một lần và trong thời gian ngắn. Hãy yêu cầu mã mới để đặt lại mật khẩu.
+                        </p>
+                    </div>
+
+                    <Link to="/forgot-password" className={primaryLinkClasses}>
+                        Yêu cầu mã mới
+                    </Link>
                 </div>
             </AuthLayout>
         );
@@ -50,16 +71,21 @@ export function ResetPassword() {
     if (isSuccess) {
         return (
             <AuthLayout>
-                <div className="text-center space-y-6 animate-in zoom-in-95 duration-500">
-                    <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto">
-                        <CheckCircle2 className="w-10 h-10 text-success" />
-                    </div>
+                {/* role="status" để screen reader thông báo kết quả — người dùng vừa submit và
+                    cần biết việc đã xong, nhưng không cần cắt ngang như role="alert". */}
+                <div className="space-y-8" role="status">
                     <div>
-                        <h1 className="text-3xl font-extrabold text-text-main mb-2">Đổi mật khẩu thành công!</h1>
-                        <p className="text-text-muted font-medium">Bạn đã có thể sử dụng mật khẩu mới để đăng nhập vào hệ thống.</p>
+                        <div className="flex items-center gap-2 text-success">
+                            <CheckCircle2 size={20} aria-hidden="true" />
+                            <h1 className="text-2xl font-semibold text-text-main">Đã đổi mật khẩu</h1>
+                        </div>
+                        <p className="text-sm text-text-muted mt-2">
+                            Từ giờ hãy dùng mật khẩu mới để đăng nhập.
+                        </p>
                     </div>
-                    <Link to="/login" className="block w-full">
-                        <Button className="w-full">Đăng nhập ngay</Button>
+
+                    <Link to="/login" className={primaryLinkClasses}>
+                        Đăng nhập
                     </Link>
                 </div>
             </AuthLayout>
@@ -68,29 +94,47 @@ export function ResetPassword() {
 
     return (
         <AuthLayout>
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-8">
                 <div>
-                    <h1 className="text-3xl font-extrabold tracking-tight text-text-main">Đặt mật khẩu mới</h1>
-                    <p className="text-text-muted mt-2 text-sm font-medium">Vui lòng tạo một mật khẩu mạnh mà bạn chưa từng sử dụng trước đây.</p>
+                    <h1 className="text-2xl font-semibold text-text-main">Đặt mật khẩu mới</h1>
+                    <p className="text-sm text-text-muted mt-2">
+                        Chọn mật khẩu bạn chưa dùng ở nơi nào khác.
+                    </p>
                 </div>
 
-                {error && (
-                    <div className="flex items-center gap-2 p-3 bg-danger/10 border border-danger/20 text-danger rounded-lg text-sm font-medium">
-                        <AlertCircle size={18} /><span>{error}</span>
-                    </div>
-                )}
+                <form className="space-y-4" onSubmit={handleSubmit}>
+                    {error && (
+                        <div
+                            role="alert"
+                            className="flex items-start gap-2.5 p-3 rounded-sm border border-danger-100 bg-danger-50 text-sm text-danger-700"
+                        >
+                            <AlertCircle size={18} className="shrink-0 mt-0.5" aria-hidden="true" />
+                            <span>{error}</span>
+                        </div>
+                    )}
 
-                <form className="space-y-5" onSubmit={handleSubmit}>
                     <Input
-                        name="password" label="Mật khẩu mới" type="password" placeholder="••••••••"
-                        value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required autoFocus
+                        name="password"
+                        label="Mật khẩu mới"
+                        type="password"
+                        value={form.password}
+                        onChange={e => setForm({ ...form, password: e.target.value })}
+                        autoComplete="new-password"
+                        required
+                        autoFocus
                     />
                     <Input
-                        name="confirmPassword" label="Xác nhận mật khẩu mới" type="password" placeholder="••••••••"
-                        value={form.confirmPassword} onChange={e => setForm({ ...form, confirmPassword: e.target.value })} required
+                        name="confirmPassword"
+                        label="Nhập lại mật khẩu mới"
+                        type="password"
+                        value={form.confirmPassword}
+                        onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+                        autoComplete="new-password"
+                        required
                     />
-                    <Button type="submit" className="w-full mt-4" isLoading={loading}>
-                        Lưu thay đổi
+
+                    <Button type="submit" fullWidth isLoading={loading} className="mt-2">
+                        Lưu mật khẩu mới
                     </Button>
                 </form>
             </div>

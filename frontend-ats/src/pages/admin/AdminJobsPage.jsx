@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '@/layout/AdminLayout';
-import { Trash2, Briefcase, Flame } from 'lucide-react';
+import { ConfirmDialog } from '@/ui/ConfirmDialog';
+import { Skeleton } from '@/ui/Skeleton';
+import { Trash2, Flame } from 'lucide-react';
 import api from '@/api/axios';
 
 export function AdminJobsPage() {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [pendingDelete, setPendingDelete] = useState(null);
 
     // GỌI API THẬT
     useEffect(() => {
@@ -35,8 +38,8 @@ export function AdminJobsPage() {
 
     // Vấn đề: Xoá tin sẽ kéo theo xoá hết application của tin đó, tác động đến nhiều ứng viên — phải có warning rõ.
     // Giải pháp: Confirm message nói rõ hậu quả; optimistic remove khỏi list sau API success.
+    // Phần optimistic giữ nguyên; chỉ đổi cơ chế hỏi sang ConfirmDialog để focus mặc định vào Hủy.
     const handleDeleteJob = async (id) => {
-        if (!window.confirm('Hành động này sẽ xóa tin tuyển dụng và toàn bộ đơn ứng tuyển của tin này. Tiếp tục?')) return;
         try {
             await api.delete(`/admin/jobs/${id}`);
             setJobs(jobs.filter(j => j._id !== id));
@@ -57,81 +60,181 @@ export function AdminJobsPage() {
         }
     };
 
+    const StatusCell = ({ job }) => {
+        if (job.isApproved === 'pending') {
+            return (
+                <div className="flex gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => handleApproveJob(job._id, 'approved')}
+                        aria-label={`Duyệt tin ${job.title}`}
+                        className="inline-flex items-center h-7 px-2 rounded-sm border border-border bg-white text-xs font-semibold text-text-main transition-colors cursor-pointer hover:bg-success-50 hover:border-success-100 hover:text-success-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                        Duyệt
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handleApproveJob(job._id, 'rejected')}
+                        aria-label={`Từ chối tin ${job.title}`}
+                        className="inline-flex items-center h-7 px-2 rounded-sm border border-border bg-white text-xs font-semibold text-text-main transition-colors cursor-pointer hover:bg-danger-50 hover:border-danger-100 hover:text-danger-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                        Từ chối
+                    </button>
+                </div>
+            );
+        }
+        const approved = job.isApproved === 'approved';
+        return (
+            <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm border text-xs font-medium ${
+                approved
+                    ? 'border-success-100 bg-success-50 text-success-700'
+                    : 'border-danger-100 bg-danger-50 text-danger-700'
+            }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${approved ? 'bg-success' : 'bg-danger'}`} aria-hidden="true" />
+                {approved ? 'Đã duyệt' : 'Bị từ chối'}
+            </span>
+        );
+    };
+
     return (
         <AdminLayout>
-            <div className="mb-8">
-                <h1 className="text-3xl font-black text-text-main">Quản lý Việc làm</h1>
-                <p className="text-text-muted mt-1 font-medium">Giám sát các tin tuyển dụng được đăng bởi HR.</p>
+            <div>
+                <h1 className="text-2xl font-semibold text-text-main">Tin tuyển dụng</h1>
+                <p className="text-sm text-text-muted mt-1">
+                    Duyệt tin trước khi ứng viên nhìn thấy, và gỡ tin vi phạm.
+                </p>
             </div>
 
-            <div className="bg-white rounded-3xl border border-border shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-surface text-text-muted text-sm uppercase tracking-wider">
-                                <th className="p-5 font-bold">Tiêu đề công việc</th>
-                                <th className="p-5 font-bold">Công ty (HR)</th>
-                                <th className="p-5 font-bold">Trạng thái</th>
-                                <th className="p-5 font-bold text-right">Thao tác</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {loading ? (
-                                <tr><td colSpan="4" className="p-10 text-center font-bold text-text-muted">Đang tải dữ liệu...</td></tr>
-                            ) : jobs.length === 0 ? (
-                                <tr><td colSpan="4" className="p-10 text-center font-bold text-text-muted">Chưa có tin tuyển dụng nào.</td></tr>
-                            ) : jobs.map((job) => (
-                                <tr key={job._id} className="hover:bg-surface/50 transition-colors">
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-text-main text-base">{job.title}</span>
-                                            {job.isFeatured && (
-                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-600 text-[10px] font-black uppercase tracking-wide">
-                                                    <Flame size={12} className="fill-current" /> Hot
-                                                </span>
-                                            )}
+            <div className="border border-border rounded-lg bg-surface-raised overflow-hidden">
+                {loading ? (
+                    <div className="p-4 space-y-3" aria-busy="true" aria-label="Đang tải danh sách tin tuyển dụng">
+                        {Array.from({ length: 8 }).map((_, i) => (
+                            <div key={i} className="flex items-center justify-between gap-4">
+                                <Skeleton className="h-4 w-64" />
+                                <Skeleton className="h-4 w-24" />
+                            </div>
+                        ))}
+                    </div>
+                ) : jobs.length === 0 ? (
+                    <p className="p-10 text-sm text-text-muted">
+                        Chưa có nhà tuyển dụng nào đăng tin lên hệ thống.
+                    </p>
+                ) : (
+                    <>
+                        <div className="hidden md:block scroll-x">
+                            <table className="w-full text-left border-collapse text-sm">
+                                <thead>
+                                    <tr className="bg-surface-sunken text-text-muted border-b border-border">
+                                        <th scope="col" className="px-4 py-2.5 font-medium text-xs">Tin tuyển dụng</th>
+                                        <th scope="col" className="px-4 py-2.5 font-medium text-xs">Nhà tuyển dụng</th>
+                                        <th scope="col" className="px-4 py-2.5 font-medium text-xs">Trạng thái duyệt</th>
+                                        <th scope="col" className="px-4 py-2.5 font-medium text-xs text-right">Thao tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border-subtle">
+                                    {jobs.map((job) => (
+                                        <tr key={job._id} className="hover:bg-surface transition-colors">
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium text-text-main">{job.title}</span>
+                                                    {job.isFeatured && (
+                                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm border border-border text-[11px] font-medium text-text-muted">
+                                                            Nổi bật
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {/* Trường job.salary không phải lúc nào cũng có (schema dùng salaryMin/salaryMax),
+                                                    nên chỉ hiện khi thật sự có giá trị thay vì in ra "Lương: " trống. */}
+                                                {job.salary && (
+                                                    <div className="text-xs text-text-subtle mt-0.5">Lương: {job.salary}</div>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                                <div className="text-text-main">{job.recruiter?.companyName || 'Không rõ'}</div>
+                                                <div className="text-xs text-text-subtle">{job.recruiter?.email}</div>
+                                            </td>
+                                            <td className="px-4 py-2.5"><StatusCell job={job} /></td>
+                                            <td className="px-4 py-2.5">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleHot(job._id)}
+                                                        aria-pressed={Boolean(job.isFeatured)}
+                                                        aria-label={job.isFeatured ? `Bỏ đánh dấu nổi bật cho tin ${job.title}` : `Đánh dấu nổi bật cho tin ${job.title}`}
+                                                        className={`inline-flex items-center justify-center w-8 h-8 rounded-sm transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                                                            job.isFeatured ? 'text-warning-700 bg-warning-50' : 'text-text-muted hover:bg-surface-sunken hover:text-text-main'
+                                                        }`}
+                                                    >
+                                                        <Flame size={16} className={job.isFeatured ? 'fill-current' : ''} aria-hidden="true" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPendingDelete(job)}
+                                                        aria-label={`Xóa tin ${job.title}`}
+                                                        className="inline-flex items-center justify-center w-8 h-8 rounded-sm text-text-muted transition-colors cursor-pointer hover:bg-danger-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                                    >
+                                                        <Trash2 size={16} aria-hidden="true" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <ul className="md:hidden divide-y divide-border-subtle">
+                            {jobs.map((job) => (
+                                <li key={job._id} className="px-4 py-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="font-medium text-sm text-text-main">{job.title}</div>
+                                            <div className="text-xs text-text-muted mt-0.5">{job.recruiter?.companyName || 'Không rõ'}</div>
                                         </div>
-                                        <div className="text-xs font-bold text-text-muted mt-1 flex items-center gap-1">
-                                            <Briefcase size={12} /> Lương: {job.salary}
-                                        </div>
-                                    </td>
-                                    <td className="p-5 text-sm font-bold text-text-main">
-                                        {job.recruiter?.companyName || 'N/A'}
-                                        <div className="font-medium text-text-muted text-xs font-normal">{job.recruiter?.email}</div>
-                                    </td>
-                                    <td className="p-5">
-                                        {job.isApproved === 'pending' ? (
-                                            <div className="flex gap-2">
-                                                <button onClick={() => handleApproveJob(job._id, 'approved')} className="px-3 py-1 bg-success text-white text-xs font-bold rounded-lg">Duyệt</button>
-                                                <button onClick={() => handleApproveJob(job._id, 'rejected')} className="px-3 py-1 bg-danger text-white text-xs font-bold rounded-lg">Từ chối</button>
-                                            </div>
-                                        ) : (
-                                            <span className={`px-3 py-1.5 text-xs font-bold rounded-full ${job.isApproved === 'approved' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
-                                                {job.isApproved === 'approved' ? 'Đã duyệt' : 'Bị từ chối'}
-                                            </span>
-                                        )}
-                                    </td>
-                                    <td className="p-5 text-right flex items-center justify-end gap-2">
-                                        <button
-                                            onClick={() => handleToggleHot(job._id)}
-                                            className={`p-2.5 rounded-xl transition-colors ${job.isFeatured
-                                                ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
-                                                : 'text-text-muted hover:text-amber-600 hover:bg-amber-100'
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleHot(job._id)}
+                                                aria-pressed={Boolean(job.isFeatured)}
+                                                aria-label={job.isFeatured ? `Bỏ đánh dấu nổi bật cho tin ${job.title}` : `Đánh dấu nổi bật cho tin ${job.title}`}
+                                                className={`inline-flex items-center justify-center w-9 h-9 rounded-sm border border-border cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                                                    job.isFeatured ? 'text-warning-700 bg-warning-50' : 'text-text-muted'
                                                 }`}
-                                            title={job.isFeatured ? 'Bỏ đánh dấu Đang HOT' : 'Đánh dấu tin Đang HOT'}
-                                        >
-                                            <Flame size={20} className={job.isFeatured ? 'fill-current' : ''} />
-                                        </button>
-                                        <button onClick={() => handleDeleteJob(job._id)} className="p-2.5 text-text-muted hover:text-danger hover:bg-danger/10 rounded-xl transition-colors" title="Xóa tin">
-                                            <Trash2 size={20} />
-                                        </button>
-                                    </td>
-                                </tr>
+                                            >
+                                                <Flame size={16} className={job.isFeatured ? 'fill-current' : ''} aria-hidden="true" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPendingDelete(job)}
+                                                aria-label={`Xóa tin ${job.title}`}
+                                                className="inline-flex items-center justify-center w-9 h-9 rounded-sm border border-border text-text-muted cursor-pointer hover:bg-danger-50 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                                            >
+                                                <Trash2 size={16} aria-hidden="true" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2"><StatusCell job={job} /></div>
+                                </li>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
+                        </ul>
+                    </>
+                )}
             </div>
+
+            <ConfirmDialog
+                open={Boolean(pendingDelete)}
+                title="Xóa tin tuyển dụng"
+                message={pendingDelete
+                    ? `Xóa "${pendingDelete.title}" sẽ xóa luôn toàn bộ đơn ứng tuyển đã nộp cho tin này. Ứng viên sẽ mất lịch sử nộp đơn và không khôi phục được.`
+                    : ''}
+                confirmLabel="Xóa tin"
+                onCancel={() => setPendingDelete(null)}
+                onConfirm={() => {
+                    const target = pendingDelete;
+                    setPendingDelete(null);
+                    if (target) handleDeleteJob(target._id);
+                }}
+            />
         </AdminLayout>
     );
 }

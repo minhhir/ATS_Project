@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { CandidateLayout } from '@/layout/CandidateLayout';
-import { Button } from '@/ui/Button';
+import { Badge } from '@/ui/Badge';
+import { SkeletonCard } from '@/ui/Skeleton';
 import api from '@/api/axios';
-import { Building, MapPin, Clock, FileText, Loader2, Zap, ArrowRight, Briefcase } from 'lucide-react';
+import { MapPin, Clock, ArrowRight } from 'lucide-react';
 
 export function ApplicationsPage() {
     const [applications, setApplications] = useState([]);
@@ -24,120 +25,136 @@ export function ApplicationsPage() {
     }, []);
 
     // Vấn đề: Status từ BE là enum tiếng Anh, hiển thị thẳng cho candidate sẽ khó hiểu; mỗi status cần màu riêng để user nhận diện trạng thái nhanh.
-    // Giải pháp: Map config (label tiếng Việt + Tailwind class) theo status, fallback về 'applied' nếu BE thêm status mới mà FE chưa update.
+    // Giải pháp: Map config (label tiếng Việt + variant của Badge) theo status, fallback về 'applied' nếu BE thêm status mới mà FE chưa update.
+    //
+    // Trước đây mỗi trạng thái dùng một hue riêng (blue / amber / purple / emerald / red) — năm màu
+    // ngoài bảng màu hệ thống. Giờ gom về 4 variant có nghĩa thật, phân biệt thêm bằng chấm màu:
+    //   neutral → chưa có tiến triển   warning → đang chờ người khác xử lý
+    //   success → kết quả tốt          danger  → kết thúc, không đạt
     const getStatusConfig = (status) => {
         const configs = {
-            applied: { label: 'Mới nộp', style: 'bg-surface text-text-muted border-border' },
-            reviewing: { label: 'Đang xem xét', style: 'bg-blue-50 text-blue-600 border-blue-200' },
-            shortlisted: { label: 'Đã chọn lọc', style: 'bg-amber-50 text-amber-600 border-amber-200' },
-            interviewed: { label: 'Đã phỏng vấn', style: 'bg-purple-50 text-purple-600 border-purple-200' },
-            offered: { label: 'Đã cấp Offer', style: 'bg-emerald-50 text-emerald-600 border-emerald-200' },
-            rejected: { label: 'Từ chối', style: 'bg-red-50 text-red-600 border-red-200' }
+            applied: { label: 'Mới nộp', variant: 'neutral' },
+            reviewing: { label: 'Đang xem xét', variant: 'warning' },
+            shortlisted: { label: 'Đã vào danh sách ngắn', variant: 'primary' },
+            interviewed: { label: 'Đã phỏng vấn', variant: 'primary' },
+            offered: { label: 'Đã nhận offer', variant: 'success' },
+            rejected: { label: 'Không được chọn', variant: 'danger' }
         };
         return configs[status] || configs.applied;
     };
 
     return (
         <CandidateLayout>
-            <div className="mb-8">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-text-main">Đơn đã nộp</h1>
-                <p className="text-text-muted mt-1 font-medium">Theo dõi tiến độ và kết quả các vị trí bạn đã ứng tuyển.</p>
+            <div>
+                <h1 className="text-2xl font-semibold text-text-main">Đơn đã nộp</h1>
+                <p className="text-sm text-text-muted mt-1">
+                    Theo dõi trạng thái từng hồ sơ bạn đã gửi và điểm khớp mà hệ thống tính được.
+                </p>
             </div>
 
             {loading ? (
-                <div className="flex flex-col items-center justify-center p-12 text-primary bg-white rounded-2xl border border-border">
-                    <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                    <p className="font-medium">Đang tải dữ liệu...</p>
+                <div className="space-y-3" aria-busy="true" aria-label="Đang tải danh sách đơn đã nộp">
+                    {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
             ) : applications.length === 0 ? (
-                <div className="bg-white rounded-2xl border border-border p-16 text-center flex flex-col items-center">
-                    <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mb-6">
-                        <FileText className="w-10 h-10 text-text-muted" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-text-main mb-2">Bạn chưa ứng tuyển công việc nào</h2>
-                    <p className="text-text-muted mb-8 max-w-md mx-auto">Hàng ngàn cơ hội việc làm hấp dẫn đang chờ đón bạn. Hãy khám phá và nộp CV ngay hôm nay!</p>
-                    <Link to="/jobs">
-                        <Button className="px-8"><Briefcase className="mr-2" size={18} /> Tìm việc ngay</Button>
+                // Copy cụ thể theo nghiệp vụ: nói rõ ứng viên chưa làm việc gì và bước tiếp theo là gì,
+                // thay cho câu quảng cáo "Hàng ngàn cơ hội đang chờ đón bạn".
+                <div className="border border-border rounded-lg bg-surface-raised p-10 max-w-xl">
+                    <h2 className="text-base font-semibold text-text-main">
+                        Bạn chưa nộp hồ sơ cho vị trí nào
+                    </h2>
+                    <p className="text-sm text-text-muted mt-2">
+                        Khi bạn nộp CV cho một tin tuyển dụng, đơn sẽ xuất hiện ở đây kèm trạng thái do
+                        nhà tuyển dụng cập nhật — từ lúc mới nộp đến khi có kết quả.
+                    </p>
+                    <Link
+                        to="/candidate/jobs"
+                        className="inline-flex items-center justify-center h-11 px-4 mt-5 rounded-lg bg-primary text-sm font-semibold text-white transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                    >
+                        Xem việc làm đang tuyển
                     </Link>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                // Danh sách một cột: mỗi đơn là một dòng thông tin cần đọc theo thứ tự
+                // (trạng thái → vị trí → điểm khớp), không phải ô lưới để so sánh song song.
+                <ul className="space-y-3">
                     {applications.map((app) => {
                         const job = app.job;
                         const company = job?.recruiter;
                         const statusCfg = getStatusConfig(app.status);
 
                         return (
-                            <div key={app._id} className="bg-white rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-
-                                {/* Trạng thái đơn */}
-                                <div className="flex justify-between items-start mb-5">
-                                    <span className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${statusCfg.style}`}>
-                                        Trạng thái: {statusCfg.label}
+                            <li key={app._id} className="border border-border rounded-lg bg-surface-raised p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <Badge variant={statusCfg.variant} dot>{statusCfg.label}</Badge>
+                                    <span className="text-xs text-text-subtle">
+                                        Nộp ngày {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : 'không rõ'}
                                     </span>
-                                    <div className="text-xs font-medium text-text-muted">
-                                        Nộp ngày: {app.createdAt ? new Date(app.createdAt).toLocaleDateString('vi-VN') : 'Không rõ'}
-                                    </div>
                                 </div>
 
-                                {/* Thông tin Job */}
-                                <div className="flex gap-4 mb-6">
-                                    <div className="w-14 h-14 rounded-xl border border-border bg-surface p-2 shrink-0 flex items-center justify-center">
+                                <div className="flex items-start gap-3 mt-3">
+                                    <div className="w-10 h-10 rounded-sm border border-border bg-surface flex items-center justify-center shrink-0 overflow-hidden">
                                         <img
-                                            src={company?.companyLogo || `https://ui-avatars.com/api/?name=${company?.companyName || 'C'}&background=e0f2fe&color=0284c7`}
-                                            alt="Logo"
-                                            className="w-full h-full object-contain rounded-lg"
+                                            src={company?.companyLogo || `https://ui-avatars.com/api/?name=${company?.companyName || 'C'}&background=f1f5f9&color=475569`}
+                                            alt=""
+                                            className="w-full h-full object-contain"
                                         />
                                     </div>
-                                    <div>
-                                        <h3 className="text-lg font-bold text-text-main leading-tight mb-1 group-hover:text-primary transition-colors">
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="text-base font-semibold text-text-main truncate">
                                             {job?.title || 'Tin tuyển dụng đã bị xóa'}
                                         </h3>
-                                        <div className="flex items-center gap-1.5 text-text-muted font-medium text-sm">
-                                            <Building size={16} />
-                                            <span className="truncate max-w-[150px]">{company?.companyName || 'Công ty ẩn danh'}</span>
-                                        </div>
+                                        <p className="text-sm text-text-muted truncate mt-0.5">
+                                            {company?.companyName || 'Công ty ẩn danh'}
+                                        </p>
                                     </div>
                                 </div>
 
-                                <div className="flex flex-wrap gap-3 mb-6">
-                                    <div className="flex items-center gap-1.5 text-xs text-text-muted bg-surface px-2.5 py-1.5 rounded-md font-medium">
-                                        <MapPin size={14} className="text-primary" /> {job?.location || 'Không rõ'}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-xs text-text-muted bg-surface px-2.5 py-1.5 rounded-md font-medium">
-                                        <Clock size={14} className="text-primary" /> {job?.type || 'Không rõ'}
-                                    </div>
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border text-xs font-medium text-text-muted">
+                                        <MapPin size={13} className="text-text-subtle shrink-0" aria-hidden="true" />
+                                        {job?.location || 'Không rõ'}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border border-border text-xs font-medium text-text-muted">
+                                        <Clock size={13} className="text-text-subtle shrink-0" aria-hidden="true" />
+                                        {job?.type || 'Không rõ'}
+                                    </span>
                                 </div>
 
-                                {/* ĐIỂM AI & Nút Action */}
-                                <div className="pt-5 border-t border-border flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-lg bg-primary-light flex items-center justify-center text-primary">
-                                            <Zap size={16} />
-                                        </div>
-                                        <div>
-                                            <div className="text-xs font-bold text-text-muted">Điểm AI phân tích</div>
-                                            {app.aiStatus === 'done' ? (
-                                                <div className={`font-black text-sm ${app.aiScore >= 80 ? 'text-success' : app.aiScore >= 50 ? 'text-warning' : 'text-danger'}`}>
-                                                    {app.aiScore} / 100
-                                                </div>
-                                            ) : (
-                                                <div className="text-sm font-semibold text-text-main">Đang chờ xử lý...</div>
-                                            )}
-                                        </div>
+                                <div className="mt-4 pt-3 border-t border-border-subtle flex flex-wrap items-center justify-between gap-3">
+                                    {/* Điểm khớp: nhãn nhỏ ở trên, số đậm ở dưới. Bỏ khối icon Zap bọc
+                                        nền tint — con số đã là thứ cần đọc, icon chỉ thêm nhiễu. */}
+                                    <div>
+                                        <div className="text-xs text-text-subtle">Điểm hệ thống chấm CV</div>
+                                        {app.aiStatus === 'done' ? (
+                                            <div className="text-sm font-semibold text-text-main mt-0.5">
+                                                {app.aiScore}
+                                                <span className="text-text-subtle font-normal"> / 100</span>
+                                            </div>
+                                        ) : (
+                                            <div className="text-sm text-text-muted mt-0.5">Đang chấm, thường mất vài phút</div>
+                                        )}
                                     </div>
 
-                                    <Link to={job ? `/jobs/${job._id}` : '#'}>
-                                        <Button variant="outline" className="text-sm px-4 py-2" disabled={!job}>
-                                            Xem lại tin <ArrowRight size={16} className="ml-1" />
-                                        </Button>
-                                    </Link>
+                                    {/* Vấn đề: Trước đây là <Link><Button/></Link> — lồng <button> trong <a>
+                                        là HTML không hợp lệ; và khi job đã bị xóa thì Link vẫn trỏ tới '#'
+                                        nên vẫn bấm được dù nút bên trong đã disabled.
+                                        Giải pháp: Không có job thì render chữ trơn, không render link. */}
+                                    {job ? (
+                                        <Link
+                                            to={`/jobs/${job._id}`}
+                                            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border bg-white text-sm font-semibold text-text-main transition-colors hover:bg-surface hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+                                        >
+                                            Xem lại tin <ArrowRight size={15} aria-hidden="true" />
+                                        </Link>
+                                    ) : (
+                                        <span className="text-xs text-text-subtle">Tin đã bị xóa, không xem lại được</span>
+                                    )}
                                 </div>
-
-                            </div>
+                            </li>
                         );
                     })}
-                </div>
+                </ul>
             )}
         </CandidateLayout>
     );
