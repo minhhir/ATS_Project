@@ -2,7 +2,6 @@ const Job = require('../models/Job');
 const AppError = require('../utils/AppError');
 const mongoose = require('mongoose');
 const Application = require('../models/Application');
-const filter = { isActive: true, isApproved: 'approved' };
 
 // Vấn đề: Trả về toàn bộ job sẽ kéo nặng response và làm chậm UI; user có thể truyền limit=1000000 để DoS database; query string đến dạng string không thể dùng làm số.
 // Giải pháp: Bắt buộc pagination với cap limit=50, ép parseInt và clamp về [1, 50] để mọi giá trị đầu vào đều an toàn.
@@ -14,7 +13,11 @@ exports.getJobs = async (req, res, next) => {
         const limitNum = Math.min(50, parseInt(limit) || 10);
         const skip = (pageNum - 1) * limitNum;
 
-        const filter = { isActive: true };
+        // Vấn đề: Trước đây có 1 biến `filter` khai ở module-level đã gắn sẵn approvalStatus:'approved',
+        // nhưng bị khai lại (shadow) ngay bên trong hàm này mà không có approvalStatus → tin pending/rejected
+        // vẫn lọt vào danh sách/tìm kiếm công khai.
+        // Giải pháp: Filter công khai phải luôn chỉ trả tin đã duyệt, khai đúng ngay từ đầu trong scope hàm.
+        const filter = { isActive: true, approvalStatus: 'approved' };
 
         // Vấn đề: Search bằng regex trên text dài rất chậm; lương nằm trong khoảng nên không thể compare đơn lẻ.
         // Giải pháp: Dùng $text index cho keyword, regex i cho location ngắn, và compare chéo salaryMax/salaryMin để tìm overlap khoảng lương.
@@ -72,7 +75,7 @@ exports.getJobs = async (req, res, next) => {
 // [GET] /api/jobs/featured - Lấy danh sách Job nổi bật
 exports.getFeaturedJobs = async (req, res, next) => {
     try {
-        const jobs = await Job.find({ isActive: true, isFeatured: true })
+        const jobs = await Job.find({ isActive: true, isFeatured: true, approvalStatus: 'approved' })
             .sort({ createdAt: -1 })
             .limit(6)
             .populate('recruiter', 'name companyName companyLogo')
@@ -93,7 +96,7 @@ exports.getJobById = async (req, res, next) => {
             return res.status(404).json({ message: 'Không tìm thấy công việc' });
         }
 
-        if (job.isApproved !== 'approved') {
+        if (job.approvalStatus !== 'approved') {
             if (!req.user) {
                 return res.status(403).json({ message: 'Tin tuyển dụng này đang chờ duyệt.' });
             }
@@ -111,7 +114,7 @@ exports.getJobById = async (req, res, next) => {
         next(error);
     }
 };
-// Vấn đề: Nếu spread req.body vào Job.create, attacker có thể tự set isApproved='approved' hoặc recruiter=otherId để mạo danh.
+// Vấn đề: Nếu spread req.body vào Job.create, attacker có thể tự set approvalStatus='approved' hoặc recruiter=otherId để mạo danh.
 // Giải pháp: Whitelist explicit field cho phép, recruiter luôn lấy từ req.user.id (đã verify ở middleware) thay vì body.
 exports.createJob = async (req, res, next) => {
     try {
@@ -128,7 +131,7 @@ exports.createJob = async (req, res, next) => {
     } catch (err) { next(err); }
 };
 
-// Vấn đề: ID không phải ObjectId sẽ ném CastError 500; HR khác có thể sửa tin của HR khác; client gửi field rác (isApproved) sẽ ghi đè trạng thái duyệt.
+// Vấn đề: ID không phải ObjectId sẽ ném CastError 500; HR khác có thể sửa tin của HR khác; client gửi field rác (approvalStatus) sẽ ghi đè trạng thái duyệt.
 // Giải pháp: Validate ObjectId, chỉ cho owner hoặc admin sửa, whitelist explicit field, lọc undefined để không ghi đè field cũ thành null.
 exports.updateJob = async (req, res, next) => {
     try {

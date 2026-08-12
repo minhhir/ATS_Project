@@ -19,8 +19,10 @@ router.patch('/:id/feature', protect, isRecruiter, applicationController.toggleF
 router.post('/:id/score', protect, isRecruiter, applicationController.retriggerScore);
 router.patch('/:id/status', protect, isRecruiter, applicationController.updateApplicationStatus);
 
-// Vấn đề: Report là tính năng dành cho HR (báo CV giả), không cần isCandidate; check ownership ở controller đủ.
-// Giải pháp: Chỉ yêu cầu protect, để controller verify recruiter của job khớp người gọi.
-router.post('/:id/report', protect, applicationController.reportApplication);
+// Vấn đề: Report là tính năng dành cho HR (báo CV giả); chỉ có protect thì bất kỳ user đã đăng nhập
+// nào (kể cả candidate) cũng gọi được endpoint, dựa hoàn toàn vào check ownership ở controller.
+// Giải pháp: Thêm isRecruiter cùng pattern các route recruiter-only khác trong file này, controller
+// vẫn giữ nguyên check recruiter của job khớp người gọi như một lớp phòng thủ thứ hai.
+router.post('/:id/report', protect, isRecruiter, applicationController.reportApplication);
 
 module.exports = router;
