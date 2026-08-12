@@ -28,7 +28,7 @@ const jobSchema = new mongoose.Schema({
         enum: ['intern', 'fresher', 'junior', 'mid', 'senior', 'lead'],
         required: true
     },
-    isApproved: {
+    approvalStatus: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],
         default: 'pending'

@@ -93,12 +93,12 @@ exports.getApplicationDetail = async (req, res, next) => {
 };
 
 // Vấn đề: Tin do HR đăng phải qua kiểm duyệt trước khi public để chống spam/scam; HR không được tự duyệt tin của mình.
-// Giải pháp: Endpoint riêng cho admin set isApproved, route đã chặn role !== admin nên ở đây chỉ update field.
+// Giải pháp: Endpoint riêng cho admin set approvalStatus, route đã chặn role !== admin nên ở đây chỉ update field.
 exports.approveJob = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
-        const job = await Job.findByIdAndUpdate(id, { isApproved: status }, { new: true });
+        const job = await Job.findByIdAndUpdate(id, { approvalStatus: status }, { new: true });
         if (!job) return res.status(404).json({ message: 'Không tìm thấy tin' });
 
         res.json({ success: true, message: `Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} tin tuyển dụng!` });
@@ -244,7 +244,7 @@ exports.getAnalytics = async (req, res, next) => {
 
         // 3) Phân bố trạng thái duyệt tin
         const jobApprovalAgg = await Job.aggregate([
-            { $group: { _id: '$isApproved', count: { $sum: 1 } } }
+            { $group: { _id: '$approvalStatus', count: { $sum: 1 } } }
         ]);
         const jobApproval = { pending: 0, approved: 0, rejected: 0 };
         jobApprovalAgg.forEach(r => { jobApproval[r._id] = r.count; });

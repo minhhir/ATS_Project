@@ -67,7 +67,7 @@ function App() {
           <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsersPage /></ProtectedRoute>} />
           <Route path="/admin/jobs" element={<ProtectedRoute allowedRoles={['admin']}><AdminJobsPage /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute allowedRoles={['admin']}><AdminSettingsPage /></ProtectedRoute>} />
-          <Route path="/admin/applications/:id" element={<AdminApplicationDetailPage />} />
+          <Route path="/admin/applications/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminApplicationDetailPage /></ProtectedRoute>} />
           {/* ===== BẮT LỖI 404 (Trang không tồn tại thì tự văng về trang chủ) ===== */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

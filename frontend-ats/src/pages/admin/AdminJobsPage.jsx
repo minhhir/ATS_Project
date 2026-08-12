@@ -25,11 +25,11 @@ export function AdminJobsPage() {
         fetchJobs();
     }, []);
     // Vấn đề: Tin tuyển dụng pending phải có cả 2 nút "Duyệt" và "Từ chối"; sau khi approve thì status badge phải đổi ngay không bắt admin F5.
-    // Giải pháp: 1 hàm handleApprove nhận status param ('approved'|'rejected'), optimistic update isApproved trong state.
+    // Giải pháp: 1 hàm handleApprove nhận status param ('approved'|'rejected'), optimistic update approvalStatus trong state.
     const handleApproveJob = async (id, status) => {
         try {
             await api.patch(`/admin/jobs/${id}/approve`, { status });
-            setJobs(jobs.map(j => j._id === id ? { ...j, isApproved: status } : j));
+            setJobs(jobs.map(j => j._id === id ? { ...j, approvalStatus: status } : j));
             alert(`Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} tin!`);
         } catch {
             alert('Lỗi khi phê duyệt!');
@@ -61,7 +61,7 @@ export function AdminJobsPage() {
     };
 
     const StatusCell = ({ job }) => {
-        if (job.isApproved === 'pending') {
+        if (job.approvalStatus === 'pending') {
             return (
                 <div className="flex gap-1.5">
                     <button
@@ -83,7 +83,7 @@ export function AdminJobsPage() {
                 </div>
             );
         }
-        const approved = job.isApproved === 'approved';
+        const approved = job.approvalStatus === 'approved';
         return (
             <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-sm border text-xs font-medium ${
                 approved
