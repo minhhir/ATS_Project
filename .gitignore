@@ -1,3 +1,9 @@
 
 # File ngu?n v? sõ ð? — ch? gi? local, ð? export PNG vào docs/images
 ats-diagrams.drawio
+
+# AI coding tool skills (local only)
+**/.claude/
+**/.agents/
+**/.cursor/
+**/.continue/
